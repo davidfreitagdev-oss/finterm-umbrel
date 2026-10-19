@@ -17,7 +17,7 @@ const crypto = require('crypto');
 const dns = require('dns').promises;
 const net = require('net');
 
-const VERSION = '1.0.0';
+const VERSION = '1.2.0';
 const PORT = parseInt(process.env.PORT || '8420', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, '..', 'data'));
@@ -926,7 +926,7 @@ function getStockFng() {
 
 function mempoolBase() {
   const s = state.settings?.mempoolUrl;
-  return (s && /^https?:\/\//.test(s) ? s : MEMPOOL_DEFAULT).replace(/\/+$/, '');
+  return (s && /^https?:\/\//.test(s) ? s : mempoolLocal || MEMPOOL_DEFAULT).replace(/\/+$/, '');
 }
 function getMempool() {
   const base = mempoolBase();
@@ -941,7 +941,7 @@ function getMempool() {
     mark('mempool', true);
     const m = ok(mp);
     return {
-      base, fees: ok(fees), height: ok(height) ? parseInt(ok(height), 10) : null, difficulty: ok(diff),
+      base, local: base === mempoolLocal || !/mempool\.space/.test(base), fees: ok(fees), height: ok(height) ? parseInt(ok(height), 10) : null, difficulty: ok(diff),
       mempool: m ? { count: m.count, vsize: m.vsize, totalFee: m.total_fee } : null,
       hashrate: ok(hr) ? { current: ok(hr).currentHashrate, difficulty: ok(hr).currentDifficulty } : null,
       blocks: (ok(blocks) || []).slice(0, 8).map(b => ({ height: b.height, ts: b.timestamp * 1000, tx: b.tx_count, size: b.size, pool: b.extras?.pool?.name, medianFee: b.extras?.medianFee, reward: b.extras?.reward })),
@@ -1243,6 +1243,390 @@ async function runAlerts() {
   }
 }
 
+// ───────────────────────────── Portfolio (Ghostfolio-style analysis) ─────────────────────────────
+const EXT_FILE = path.join(DATA_DIR, 'portfolio-external.json');
+let ext = { activities: [], accounts: [], source: null, syncedAt: null };
+function loadExt() { try { ext = JSON.parse(fs.readFileSync(EXT_FILE, 'utf8')) || ext; } catch { /* first run */ } }
+function saveExt() { writeJSONAtomic(EXT_FILE, ext); cache.forEach((v, k) => { if (k.startsWith('pfa:')) cache.delete(k); }); }
+
+const _ldf = {};
+function localDate(ts, tz) {
+  tz = tz || (state.settings && state.settings.timezone) || 'Europe/Prague';
+  let f = _ldf[tz];
+  if (!f) { try { f = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }); } catch { f = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }); } _ldf[tz] = f; }
+  return f.format(ts);
+}
+
+const CG_MAP = { bitcoin: 'BTC-USD', ethereum: 'ETH-USD', solana: 'SOL-USD', ripple: 'XRP-USD', cardano: 'ADA-USD', dogecoin: 'DOGE-USD', binancecoin: 'BNB-USD', tron: 'TRX-USD', chainlink: 'LINK-USD', 'avalanche-2': 'AVAX-USD', polkadot: 'DOT-USD', litecoin: 'LTC-USD', 'bitcoin-cash': 'BCH-USD', monero: 'XMR-USD', stellar: 'XLM-USD', 'shiba-inu': 'SHIB-USD', cosmos: 'ATOM-USD', 'matic-network': 'POL-USD', uniswap: 'UNI-USD', 'ethereum-classic': 'ETC-USD' };
+async function cgToYahoo(id) {
+  if (CG_MAP[id]) return CG_MAP[id];
+  try { const m = (await getCryptoMarkets()).find(c => c.id === id); if (m) return m.symbol.toUpperCase() + '-USD'; } catch { /* offline */ }
+  return null;
+}
+
+async function convertGhostfolio(j) {
+  if (!j || !Array.isArray(j.activities)) throw Object.assign(new Error('Soubor není Ghostfolio export (chybí activities)'), { status: 400 });
+  const accounts = (j.accounts || []).map(a => {
+    const bal = Array.isArray(a.balances) && a.balances.length ? [...a.balances].sort((x, y) => String(x.date).localeCompare(String(y.date))).pop().value : a.balance;
+    return { id: a.id, name: a.name || 'Účet', currency: a.currency || 'USD', balance: +bal || 0, excluded: !!a.isExcluded };
+  });
+  const accName = Object.fromEntries(accounts.map(a => [a.id, a.name]));
+  const out = [], unknown = [];
+  for (const a of j.activities) {
+    const type = String(a.type || '').toUpperCase();
+    const ds = String(a.dataSource || (a.SymbolProfile && a.SymbolProfile.dataSource) || 'YAHOO').toUpperCase();
+    const sym = a.symbol || (a.SymbolProfile && a.SymbolProfile.symbol) || '';
+    let y = ds === 'COINGECKO' ? await cgToYahoo(sym) : ds === 'MANUAL' ? 'MANUAL:' + sym : String(sym).toUpperCase();
+    if (!y) { unknown.push(`${ds}:${sym}`); y = 'MANUAL:' + sym; }
+    const ts = Date.parse(a.date);
+    out.push({
+      id: 'gf-' + hash(JSON.stringify([a.id || '', a.date, sym, type, a.quantity, a.unitPrice, a.accountId])), date: Number.isFinite(ts) ? localDate(ts) : String(a.date).slice(0, 10),
+      type, symbol: y, origSymbol: sym, dataSource: ds, qty: +a.quantity || 0, price: +a.unitPrice || 0, fee: +a.fee || 0,
+      currency: a.currency || (a.SymbolProfile && a.SymbolProfile.currency) || 'USD', account: accName[a.accountId] || '', comment: a.comment || '', source: 'ghostfolio',
+    });
+  }
+  return { activities: out, accounts, unknown, baseCurrency: (j.user && j.user.settings && j.user.settings.currency) || null, meta: j.meta || null };
+}
+
+// Ghostfolio REST API (self-hosted): POST /api/v1/auth/anonymous {accessToken} → JWT, GET /api/v1/export → activities
+const gf = { jwt: null, t: 0, key: '', base: null };
+function gfCandidates() {
+  const g = (state.settings && state.settings.ghostfolio) || {};
+  const u = String(g.url || '').trim().replace(/\/+$/, '').replace(/\/(?:[a-z]{2})(?:\/.*)?$/i, '');
+  // Umbrel puts Ghostfolio behind its login proxy (302 → app-auth), so the internal container address is tried as well
+  return [...new Set([u, process.env.GHOSTFOLIO_URL, 'http://ghostfolio_server_1:3334'].filter(x => x && /^https?:\/\//.test(x)))];
+}
+async function gfJSON(base, p, opts = {}) {
+  const r = await fetchRaw(base + p, { ...opts, timeout: opts.timeout || 20000, redirect: 'manual', headers: { Accept: 'application/json', ...(opts.headers || {}) } });
+  const ct = r.headers.get('content-type') || '';
+  if (r.status >= 300 && r.status < 400) throw Object.assign(new Error('přesměrování na přihlášení (Umbrel proxy)'), { soft: true });
+  if (!/json/.test(ct)) throw Object.assign(new Error(`odpověď není JSON (HTTP ${r.status})`), { soft: true, status: r.status });
+  const j = await r.json();
+  if (!r.ok) throw Object.assign(new Error((j && (j.message || j.error)) || 'HTTP ' + r.status), { status: r.status });
+  return j;
+}
+async function gfLogin(base, token) {
+  try { return (await gfJSON(base, '/api/v1/auth/anonymous', { method: 'POST', body: JSON.stringify({ accessToken: token }), headers: { 'Content-Type': 'application/json' } })).authToken; }
+  catch (e) { if (e.status !== 404 && e.status !== 405) throw e; }
+  return (await gfJSON(base, '/api/v1/auth/anonymous/' + encodeURIComponent(token))).authToken; // older Ghostfolio versions
+}
+async function ghostfolioSync() {
+  const token = ((state.settings && state.settings.ghostfolio) || {}).token;
+  const list = gfCandidates();
+  if (!token || !list.length) throw Object.assign(new Error('Ghostfolio není nastaven – vyplňte URL a Security Token v Nastavení → Ghostfolio'), { status: 400 });
+  const errors = [];
+  for (const base of gf.base && list.includes(gf.base) ? [gf.base, ...list.filter(b => b !== gf.base)] : list) {
+    try {
+      let jwt = gf.jwt && gf.key === base + token && Date.now() - gf.t < 6 * 3600e3 ? gf.jwt : null;
+      if (!jwt) { jwt = await gfLogin(base, token); if (!jwt) throw new Error('přihlášení tokenem selhalo'); gf.jwt = jwt; gf.t = Date.now(); gf.key = base + token; }
+      let exp;
+      try { exp = await gfJSON(base, '/api/v1/export', { headers: { Authorization: 'Bearer ' + jwt }, timeout: 40000 }); }
+      catch (e) { if (e.status !== 401 && e.status !== 403) throw e; jwt = await gfLogin(base, token); gf.jwt = jwt; gf.t = Date.now(); exp = await gfJSON(base, '/api/v1/export', { headers: { Authorization: 'Bearer ' + jwt }, timeout: 40000 }); }
+      const conv = await convertGhostfolio(exp);
+      let perf = null;
+      try { const pj = await gfJSON(base, '/api/v2/portfolio/performance?range=max', { headers: { Authorization: 'Bearer ' + jwt } }); perf = pj.performance || null; } catch { /* optional */ }
+      gf.base = base;
+      ext = { ...conv, source: 'ghostfolio-api', url: base, syncedAt: Date.now(), gfPerformance: perf, error: null };
+      saveExt();
+      mark('ghostfolio', true);
+      return { ok: true, url: base, activities: conv.activities.length, accounts: conv.accounts.length, unknown: conv.unknown };
+    } catch (e) { errors.push(`${base}: ${e.message}`); }
+  }
+  ext.error = errors.join(' | ');
+  mark('ghostfolio', false, ext.error);
+  throw Object.assign(new Error('Synchronizace s Ghostfoliem selhala – ' + ext.error), { status: 502 });
+}
+
+const SECTOR_CS = { Technology: 'Technologie', 'Financial Services': 'Finance', Healthcare: 'Zdravotnictví', 'Consumer Cyclical': 'Zbytná spotřeba', 'Consumer Defensive': 'Základní spotřeba', Industrials: 'Průmysl', Energy: 'Energie', Utilities: 'Utility', 'Real Estate': 'Nemovitosti', 'Basic Materials': 'Materiály', 'Communication Services': 'Komunikace' };
+const ETF_SECTOR = { technology: 'Technologie', financial_services: 'Finance', healthcare: 'Zdravotnictví', consumer_cyclical: 'Zbytná spotřeba', consumer_defensive: 'Základní spotřeba', industrials: 'Průmysl', energy: 'Energie', utilities: 'Utility', realestate: 'Nemovitosti', basic_materials: 'Materiály', communication_services: 'Komunikace' };
+const COUNTRY_CS = { 'United States': 'USA', Netherlands: 'Nizozemsko', France: 'Francie', Germany: 'Německo', 'Czech Republic': 'Česko', Czechia: 'Česko', 'United Kingdom': 'Velká Británie', Ireland: 'Irsko', Switzerland: 'Švýcarsko', Taiwan: 'Tchaj-wan', China: 'Čína', Japan: 'Japonsko', Canada: 'Kanada', Denmark: 'Dánsko', Sweden: 'Švédsko', Spain: 'Španělsko', Italy: 'Itálie', Austria: 'Rakousko', Poland: 'Polsko', 'South Korea': 'Jižní Korea', India: 'Indie', Israel: 'Izrael', Brazil: 'Brazílie', Australia: 'Austrálie', Belgium: 'Belgie', Norway: 'Norsko', Finland: 'Finsko', Luxembourg: 'Lucembursko', 'Hong Kong': 'Hongkong', Singapore: 'Singapur' };
+function getProfile(sym) {
+  return cached('prof:' + sym, 24 * 3600e3, async () => {
+    const j = await yahooJSON(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=assetProfile,quoteType,topHoldings,fundProfile`);
+    const r = (j && j.quoteSummary && j.quoteSummary.result && j.quoteSummary.result[0]) || {};
+    const ap = r.assetProfile || {}, th = r.topHoldings || {}, sw = {};
+    for (const o of th.sectorWeightings || []) for (const [k, v] of Object.entries(o)) { const w = yraw(v); if (w > 0) { const n = ETF_SECTOR[k] || k; sw[n] = (sw[n] || 0) + w; } }
+    return { sector: ap.sector || null, country: ap.country || null, sectorWeights: Object.keys(sw).length ? sw : null, category: (r.fundProfile && r.fundProfile.categoryName) || null };
+  }).catch(() => ({}));
+}
+function etfRegion(name) {
+  const n = String(name || '');
+  if (/s&p 500|nasdaq|russell|dow jones|\bus\b|usa|united states/i.test(n)) return 'USA';
+  if (/world|all-world|global|acwi|ftse all/i.test(n)) return 'Globální';
+  if (/europe|stoxx|euro/i.test(n)) return 'Evropa';
+  if (/emerging/i.test(n)) return 'Rozvíjející se trhy';
+  return 'Fondy (ostatní)';
+}
+
+const ACT_TYPES = new Set(['BUY', 'SELL', 'DIVIDEND', 'INTEREST', 'FEE', 'ITEM', 'LIABILITY']);
+function allActivities() {
+  const manual = (state.portfolio && Array.isArray(state.portfolio.activities) ? state.portfolio.activities : []).map(a => ({ ...a, source: a.source || 'manual' }));
+  return [...(Array.isArray(ext.activities) ? ext.activities : []), ...manual]
+    .filter(a => a && a.symbol && /^\d{4}-\d{2}-\d{2}$/.test(a.date || '') && ACT_TYPES.has(a.type))
+    .map(a => ({ ...a, qty: Math.abs(+a.qty || 0), price: +a.price || 0, fee: +a.fee || 0, currency: a.currency || 'USD' }))
+    .sort((x, y) => x.date.localeCompare(y.date) || (x.type === 'SELL') - (y.type === 'SELL'));
+}
+
+const CLASS_OF = { EQUITY: 'Akcie', ETF: 'ETF', CRYPTOCURRENCY: 'Krypto', MUTUALFUND: 'Fondy', FUTURE: 'Komodity', CURRENCY: 'Měny', INDEX: 'Index' };
+const unitNorm = c => (c === 'GBp' || c === 'GBX' ? ['GBP', 0.01] : c === 'ZAc' ? ['ZAR', 0.01] : c === 'ILA' ? ['ILS', 0.01] : c === 'USX' ? ['USD', 0.01] : [c, 1]);
+function rangeFor(days) { return days <= 360 ? '1y' : days <= 720 ? '2y' : days <= 1800 ? '5y' : days <= 3600 ? '10y' : 'max'; }
+function xirr(flows) {
+  if (flows.length < 2 || !flows.some(f => f.v > 0) || !flows.some(f => f.v < 0)) return null;
+  const t0 = flows[0].t, f = r => flows.reduce((s, x) => s + x.v / Math.pow(1 + r, (x.t - t0) / (365 * 864e5)), 0);
+  let lo = -0.99, hi = 10, flo = f(lo), fhi = f(hi);
+  if (!Number.isFinite(flo) || !Number.isFinite(fhi) || flo * fhi > 0) return null;
+  for (let i = 0; i < 100; i++) { const m = (lo + hi) / 2, fm = f(m); if (flo * fm <= 0) { hi = m; } else { lo = m; flo = fm; } }
+  return (lo + hi) / 2;
+}
+
+async function portfolioAnalysis(base, bench) {
+  const acts = allActivities();
+  const key = `pfa:${base}:${bench}:${hash(JSON.stringify(acts.map(a => [a.id, a.date, a.type, a.symbol, a.qty, a.price])))}:${Math.floor(Date.now() / 60e3)}`;
+  return cached(key, 60e3, async () => {
+    const cashAcc = (ext.accounts || []).filter(a => a.balance > 0 && !a.excluded);
+    if (!acts.length && !cashAcc.length) return { empty: true, base };
+    const today = localDate(Date.now());
+    const first = acts.length ? acts[0].date : today;
+    const days = [];
+    for (let t = Date.parse(first + 'T12:00:00Z'); ; t += 864e5) { const d = isoDate(t); days.push(d); if (d >= today) break; if (days.length > 6000) break; }
+    const range = rangeFor(days.length);
+    const syms = [...new Set(acts.filter(a => ['BUY', 'SELL', 'ITEM', 'LIABILITY'].includes(a.type)).map(a => a.symbol))];
+    const market = syms.filter(s => !/^(CASH|MANUAL):/.test(s));
+    const [quotes, charts, profiles] = await Promise.all([
+      getQuotes(market).catch(() => ({})),
+      mapLimit(market, 4, s => getChart(s, range, '1d')),
+      mapLimit(market, 3, s => getProfile(s)),
+    ]);
+    const ch = {}, prof = {};
+    market.forEach((s, i) => { ch[s] = charts[i]; prof[s] = profiles[i] || {}; });
+    // currency of each holding (quote currency wins), constant for manual/cash
+    const lastActPrice = {}, actCur = {};
+    for (const a of acts) if (['BUY', 'SELL', 'ITEM', 'LIABILITY'].includes(a.type)) { lastActPrice[a.symbol] = a.price; actCur[a.symbol] = a.currency; }
+    const curOf = s => (s.startsWith('CASH:') ? s.slice(5) : (quotes[s] && quotes[s].currency) || (ch[s] && ch[s].currency) || actCur[s] || 'USD');
+    // FX series (to base) for every currency in play
+    const curs = new Set([...syms.map(curOf), ...acts.map(a => a.currency), ...cashAcc.map(a => a.currency)]);
+    const fxArr = {};
+    await Promise.all([...curs].map(async c => {
+      const [cn, cm] = unitNorm(c), [bn, bm] = unitNorm(base), mult = cm / bm;
+      if (cn === bn) { fxArr[c] = days.map(() => mult); return; }
+      let series = null;
+      for (const [s, inv] of [[`${cn}${bn}=X`, false], ...(cn === 'USD' ? [[`${bn}=X`, false]] : []), [`${bn}${cn}=X`, true]]) {
+        try { const x = await getChart(s, range, '1d'); if (x && x.c.length > 5) { series = { x, inv }; break; } } catch { /* try next */ }
+      }
+      const now = await fxFactor(c, base).catch(() => null);
+      if (!series) { fxArr[c] = days.map(() => now || mult); return; }
+      const m = new Map(); series.x.t.forEach((ts, i) => m.set(localDate(ts, series.x.tz || 'UTC'), series.inv ? 1 / series.x.c[i] : series.x.c[i]));
+      let last = null; const firstVal = series.x.c.length ? (series.inv ? 1 / series.x.c[0] : series.x.c[0]) : now;
+      fxArr[c] = days.map((d, i) => { if (m.has(d)) last = m.get(d) * mult; if (i === days.length - 1 && now) return now; return last ?? firstVal * mult; });
+    }));
+    const fxAt = (c, i) => (fxArr[c] ? fxArr[c][i] : 1);
+    // price series aligned to calendar days (carry forward)
+    const pxArr = {};
+    for (const s of syms) {
+      const x = ch[s];
+      if (!x || !x.c.length) { const lp = lastActPrice[s] || 0; pxArr[s] = days.map(() => lp); continue; }
+      const m = new Map(); x.t.forEach((ts, i) => m.set(localDate(ts, x.tz || 'UTC'), x.c[i]));
+      let last = null;
+      pxArr[s] = days.map(d => { if (m.has(d)) last = m.get(d); return last ?? x.c[0]; });
+      const q = quotes[s];
+      if (q && isFinite(q.price)) pxArr[s][days.length - 1] = q.price;
+    }
+    if (syms.some(s => s.startsWith('CASH:'))) syms.filter(s => s.startsWith('CASH:')).forEach(s => { pxArr[s] = days.map(() => 1); });
+    // data-quality: trades priced far away from that day's market close
+    const warnings = [];
+    for (const a of acts) {
+      if ((a.type !== 'BUY' && a.type !== 'SELL') || !ch[a.symbol] || unitNorm(a.currency)[0] !== unitNorm(curOf(a.symbol))[0]) continue;
+      const i = days.indexOf(a.date), mk = i >= 0 ? pxArr[a.symbol][i] * unitNorm(curOf(a.symbol))[1] / unitNorm(a.currency)[1] : null;
+      if (mk > 0 && a.price > 0 && Math.abs(a.price / mk - 1) > 0.25) warnings.push({ date: a.date, symbol: a.symbol, type: a.type, qty: a.qty, price: a.price, market: mk, dev: (a.price / mk - 1) * 100, currency: a.currency, source: a.source });
+    }
+    // benchmark
+    let bx = null; try { bx = await getChart(bench, range, '1d'); } catch { /* none */ }
+    let bArr = null;
+    if (bx && bx.c.length) {
+      const m = new Map(); bx.t.forEach((ts, i) => m.set(localDate(ts, bx.tz || 'UTC'), bx.c[i]));
+      const bc = bx.currency || 'USD';
+      if (!fxArr[bc]) { const k = await fxFactor(bc, base).catch(() => 1); fxArr[bc] = days.map(() => k); }
+      let last = null; bArr = days.map((d, i) => { if (m.has(d)) last = m.get(d); return (last ?? bx.c[0]) * fxAt(bc, i); });
+    }
+    // day-by-day replay
+    const byDay = {};
+    for (const a of acts) (byDay[a.date] = byDay[a.date] || []).push(a);
+    const H = {};
+    const h = s => H[s] || (H[s] = { qty: 0, costB: 0, costL: 0, boughtB: 0, realized: 0, div: 0, fees: 0, first: null, flows: [], accounts: new Set() });
+    let invested = 0, realized = 0, dividends = 0, fees = 0, feeOther = 0, idx = 1, prevV = 0, bUnits = 0, bIdx0 = null;
+    const flows = [], out = { t: [], value: [], invested: [], index: [], bench: [], benchValue: [] }, rets = [], bRets = [];
+    let prevB = null;
+    for (let i = 0; i < days.length; i++) {
+      const d = days[i], ts = Date.parse(d + 'T12:00:00Z');
+      let cf = 0;
+      for (const a of byDay[d] || []) {
+        const fx = fxAt(a.currency, i), amtB = a.qty * a.price * fx, feeB = a.fee * fx, x = h(a.symbol);
+        if (a.account) x.accounts.add(a.account);
+        if (a.type === 'BUY' || a.type === 'ITEM') {
+          x.qty += a.qty; x.costB += amtB + feeB; x.costL += a.qty * a.price + a.fee; x.boughtB += amtB + feeB; x.fees += feeB; x.first = x.first || d;
+          invested += amtB + feeB; fees += feeB; cf += amtB + feeB;
+          x.flows.push({ t: ts, v: -(amtB + feeB) }); flows.push({ t: ts, v: -(amtB + feeB) });
+        } else if (a.type === 'SELL' && x.qty > 0) {
+          const q = Math.min(a.qty, x.qty), part = q / x.qty, costSold = x.costB * part, proceeds = q * a.price * fx - feeB;
+          x.realized += proceeds - costSold; realized += proceeds - costSold; x.costB -= costSold; x.costL -= x.costL * part; x.qty -= q; x.fees += feeB;
+          invested -= costSold; fees += feeB; cf -= proceeds;
+          x.flows.push({ t: ts, v: proceeds }); flows.push({ t: ts, v: proceeds });
+        } else if (a.type === 'DIVIDEND' || a.type === 'INTEREST') {
+          const amt = a.qty * a.price * fx - feeB; x.div += amt; dividends += amt; cf -= amt;
+          x.flows.push({ t: ts, v: amt }); flows.push({ t: ts, v: amt });
+        } else if (a.type === 'FEE') { const amt = (a.qty * a.price + a.fee) * fx; fees += amt; feeOther += amt; cf += amt; flows.push({ t: ts, v: -amt }); }
+        else if (a.type === 'LIABILITY') { x.qty -= a.qty; x.costB -= amtB; invested -= amtB; cf -= amtB; }
+      }
+      let v = 0;
+      for (const s of syms) { const x = H[s]; if (x && x.qty) v += x.qty * pxArr[s][i] * fxAt(curOf(s), i); }
+      if (prevV > 0) {
+        const r = (v - cf) / prevV - 1;
+        if (Number.isFinite(r) && r > -0.95 && r < 5) {
+          idx *= 1 + r;
+          // risk stats only from days without cash flows (purchase-price quirks would distort them)
+          if (!cf) { rets.push(r); if (bArr && prevB) bRets.push(bArr[i] / prevB - 1); else bRets.push(0); }
+        }
+      } else if (v > 0) idx = 1;
+      if (bArr) {
+        if (cf) bUnits += cf / bArr[i];
+        if (bIdx0 === null && v > 0) bIdx0 = bArr[i];
+        prevB = bArr[i];
+      }
+      prevV = v;
+      out.t.push(ts); out.value.push(v); out.invested.push(invested); out.index.push(idx);
+      out.bench.push(bArr && bIdx0 ? bArr[i] / bIdx0 : null); out.benchValue.push(bArr ? bUnits * bArr[i] : null);
+    }
+    // current holdings
+    const li = days.length - 1, holdings = [], closed = [];
+    let total = 0, dayChg = 0, projDiv = 0;
+    for (const s of syms) {
+      const x = H[s];
+      if (!x) continue;
+      const cur = curOf(s), fxNow = fxAt(cur, li), q = quotes[s] || {}, p = prof[s] || {};
+      const price = pxArr[s][li], value = x.qty * price * fxNow;
+      if (Math.abs(x.qty) < 1e-9) { if (x.realized || x.div) closed.push({ symbol: s, name: q.name || s, realized: x.realized, dividends: x.div }); continue; }
+      const type = s.startsWith('CASH:') ? 'CASH' : q.type || (ch[s] && ch[s].meta && ch[s].meta.type) || (s.startsWith('MANUAL:') ? 'MANUAL' : null);
+      const cls = type === 'CASH' ? 'Hotovost' : type === 'MANUAL' ? 'Ostatní' : CLASS_OF[type] || 'Ostatní';
+      const sector = cls === 'Krypto' ? 'Krypto' : cls === 'Hotovost' ? 'Hotovost' : cls === 'ETF' || cls === 'Fondy' ? (p.sectorWeights ? null : 'ETF / fondy') : SECTOR_CS[p.sector] || p.sector || 'Neznámý';
+      const country = cls === 'Krypto' ? 'Krypto' : cls === 'Hotovost' ? 'Hotovost' : cls === 'ETF' || cls === 'Fondy' ? etfRegion(q.name || q.longName) : COUNTRY_CS[p.country] || p.country || 'Neznámá';
+      const dayB = q && isFinite(q.change) ? x.qty * q.change * fxNow : 0;
+      const dy = isFinite(q.divYield) ? q.divYield : null;
+      const pdiv = dy ? value * dy / 100 : 0;
+      const years = (Date.now() - Date.parse(x.first + 'T12:00:00Z')) / (365 * 864e5);
+      const irr = years >= 0.25 ? xirr([...x.flows, { t: Date.now(), v: value }]) : null;
+      holdings.push({
+        symbol: s, name: s.startsWith('CASH:') ? 'Hotovost ' + cur : q.longName || q.name || (s.startsWith('MANUAL:') ? s.slice(7) : s), type, cls, sector, sectorWeights: sector === null ? p.sectorWeights : null, country, currency: cur,
+        accounts: [...x.accounts], qty: x.qty, avg: x.qty ? x.costL / x.qty : null, actCurrency: actCur[s], price, value, cost: x.costB, pl: value - x.costB, plPct: x.costB > 0 ? (value - x.costB) / x.costB * 100 : null,
+        dayChange: dayB, dayPct: q.changePct ?? null, realized: x.realized, dividends: x.div, fees: x.fees, first: x.first, irr, divYield: dy, projDiv: pdiv, noQuote: !s.startsWith('CASH:') && !s.startsWith('MANUAL:') && !quotes[s],
+      });
+      total += value; dayChg += dayB; projDiv += pdiv;
+    }
+    let cashTotal = 0;
+    for (const a of cashAcc) {
+      const k = await fxFactor(a.currency, base).catch(() => 1), value = a.balance * k;
+      holdings.push({ symbol: 'CASH:' + a.currency, name: `Hotovost – ${a.name}`, type: 'CASH', cls: 'Hotovost', sector: 'Hotovost', country: 'Hotovost', currency: a.currency, accounts: [a.name], qty: a.balance, avg: 1, price: 1, value, cost: value, pl: 0, plPct: 0, dayChange: 0, dividends: 0, realized: 0, first: null, cash: true });
+      cashTotal += value; total += value;
+    }
+    for (const x of holdings) x.weight = total ? x.value / total * 100 : 0;
+    holdings.sort((a, b) => b.value - a.value);
+    // allocations
+    const agg = fn => { const m = {}; for (const x of holdings) for (const [k, v] of fn(x)) m[k] = (m[k] || 0) + v; return Object.entries(m).map(([label, value]) => ({ label, value, pct: total ? value / total * 100 : 0 })).sort((a, b) => b.value - a.value); };
+    const alloc = {
+      holding: holdings.map(x => ({ label: x.symbol.replace(/^CASH:/, 'Hotovost ').replace(/^MANUAL:/, ''), value: x.value, pct: x.weight })),
+      cls: agg(x => [[x.cls, x.value]]),
+      sector: agg(x => (x.sectorWeights ? Object.entries(x.sectorWeights).map(([k, w]) => [k, x.value * w / Object.values(x.sectorWeights).reduce((s, y) => s + y, 0)]) : [[x.sector || 'ETF / fondy', x.value]])),
+      country: agg(x => [[x.country, x.value]]),
+      currency: agg(x => [[unitNorm(x.currency)[0], x.value]]),
+      account: agg(x => [[(x.accounts && x.accounts[0]) || 'Bez účtu', x.value]]),
+    };
+    // summary & risk
+    const openCost = holdings.filter(x => !x.cash).reduce((s, x) => s + x.cost, 0);
+    const unreal = total - cashTotal - openCost;
+    const net = unreal + realized + dividends - feeOther; // buy/sell fees are already inside cost basis / proceeds
+    const avgInv = (() => { const v = out.invested.filter(x => x > 0); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; })();
+    const irr = xirr([...flows, { t: Date.now(), v: total - cashTotal }]);
+    const r1 = rets.slice(-365), mean = r1.reduce((s, x) => s + x, 0) / (r1.length || 1);
+    const vol = r1.length > 20 ? Math.sqrt(r1.reduce((s, x) => s + (x - mean) ** 2, 0) / (r1.length - 1)) * Math.sqrt(365) * 100 : null;
+    let peak = 0, mdd = 0; for (const v of out.index) { peak = Math.max(peak, v); mdd = Math.min(mdd, v / peak - 1); }
+    let beta = null;
+    if (bRets.length > 20) { const n = Math.min(rets.length, bRets.length), a = rets.slice(-n), b = bRets.slice(-n), ma = a.reduce((s, x) => s + x, 0) / n, mb = b.reduce((s, x) => s + x, 0) / n; let cov = 0, vb = 0; for (let i = 0; i < n; i++) { cov += (a[i] - ma) * (b[i] - mb); vb += (b[i] - mb) ** 2; } beta = vb ? cov / vb : null; }
+    // dividends by month (base, at payment FX)
+    const divMonths = {};
+    acts.filter(a => a.type === 'DIVIDEND' || a.type === 'INTEREST').forEach(a => { const i = days.indexOf(a.date); const amt = a.qty * a.price * fxAt(a.currency, i < 0 ? li : i); divMonths[a.date.slice(0, 7)] = (divMonths[a.date.slice(0, 7)] || 0) + amt; });
+    // downsample series
+    const step = Math.max(1, Math.ceil(out.t.length / 700)), ds = {};
+    for (const k of Object.keys(out)) ds[k] = out[k].filter((_, i) => i % step === 0 || i === out[k].length - 1);
+    const twr = idx - 1, years = days.length / 365;
+    return {
+      base, bench, today, first, days: days.length, updated: Date.now(), source: { type: ext.source, syncedAt: ext.syncedAt, url: ext.url || null, error: ext.error || null, external: (ext.activities || []).length, manual: acts.filter(a => a.source === 'manual').length },
+      summary: {
+        value: total, cash: cashTotal, invested: openCost, netInvested: invested, unrealized: unreal, realized, dividends, fees, net, dayChange: dayChg, dayPct: total - dayChg ? dayChg / (total - dayChg) * 100 : 0,
+        roai: avgInv ? net / avgInv * 100 : null, simple: openCost ? unreal / openCost * 100 : null, twr: twr * 100, twrAnn: years >= 1 ? (Math.pow(1 + twr, 1 / years) - 1) * 100 : null, irr: irr != null ? irr * 100 : null,
+        vol, mdd: mdd * 100, sharpe: vol && irr != null ? (irr * 100 - 4) / vol : null, beta, projDiv, projYield: total ? projDiv / total * 100 : null,
+        benchValue: out.benchValue[out.benchValue.length - 1], gf: ext.gfPerformance || null,
+      },
+      holdings, closed, alloc, series: ds, divMonths, warnings, unknown: ext.unknown || [],
+    };
+  });
+}
+
+// ───────────────────────────── Own Bitcoin node (RPC) ─────────────────────────────
+function btcConf() {
+  const s = (state.settings && state.settings.bitcoin) || {};
+  const host = process.env.BITCOIN_RPC_HOST, port = process.env.BITCOIN_RPC_PORT || '8332';
+  const url = String(s.rpcUrl || (host ? `http://${host}:${port}` : '')).trim().replace(/\/+$/, '');
+  const user = s.rpcUser || process.env.BITCOIN_RPC_USER || '', pass = s.rpcPass || process.env.BITCOIN_RPC_PASS || '';
+  return /^https?:\/\//.test(url) && user && pass ? { url, user, pass, fromEnv: !s.rpcUrl && !!host } : null;
+}
+async function btcRpc(method, params = []) {
+  const c = btcConf();
+  if (!c) throw Object.assign(new Error('Bitcoin uzel není nastaven'), { status: 404 });
+  const r = await fetchRaw(c.url, { method: 'POST', timeout: 12000, headers: { 'Content-Type': 'application/json', Authorization: 'Basic ' + Buffer.from(c.user + ':' + c.pass).toString('base64') }, body: JSON.stringify({ jsonrpc: '1.0', id: 'finterm', method, params }) });
+  const j = await r.json().catch(() => null);
+  if (!r.ok || !j || j.error) throw new Error((j && j.error && j.error.message) || 'RPC HTTP ' + r.status);
+  return j.result;
+}
+function getNodeInfo() {
+  return cached('btcnode', 20e3, async () => {
+    const [bc, net, mp, up, mi, fees] = await Promise.all([
+      btcRpc('getblockchaininfo'), btcRpc('getnetworkinfo').catch(() => null), btcRpc('getmempoolinfo').catch(() => null), btcRpc('uptime').catch(() => null),
+      btcRpc('getmininginfo').catch(() => null), Promise.all([1, 3, 6, 144].map(b => btcRpc('estimatesmartfee', [b]).then(x => (x && x.feerate ? +(x.feerate * 1e5).toFixed(1) : null)).catch(() => null))),
+    ]);
+    mark('node', true);
+    return {
+      chain: bc.chain, blocks: bc.blocks, headers: bc.headers, progress: bc.verificationprogress, ibd: bc.initialblockdownload, size: bc.size_on_disk, pruned: bc.pruned, time: bc.time ? bc.time * 1000 : null, difficulty: bc.difficulty,
+      version: net && net.subversion, connections: net && net.connections, inbound: net && net.connections_in, outbound: net && net.connections_out,
+      networks: net && (net.networks || []).filter(n => n.reachable).map(n => n.name), mempool: mp && { size: mp.size, bytes: mp.bytes, usage: mp.usage, minfee: mp.mempoolminfee ? +(mp.mempoolminfee * 1e5).toFixed(2) : null, total: mp.total_fee },
+      uptime: up, hashps: mi && mi.networkhashps, fees: { fast: fees[0], m30: fees[1], h1: fees[2], day: fees[3] },
+    };
+  });
+}
+
+// local mempool (Umbrel app) auto-detection – internal docker DNS bypasses the app proxy
+let mempoolLocal = null;
+async function detectMempool() {
+  // Umbrel mempool app: web 10.21.21.26:3006 (container mempool_web_1), backend API 10.21.21.27:8999
+  const cands = [process.env.MEMPOOL_LOCAL, 'http://mempool_web_1:3006', 'http://10.21.21.26:3006', 'http://mempool_api_1:8999', 'http://10.21.21.27:8999'].filter(Boolean);
+  for (const c of cands) {
+    try { const r = await fetchRaw(c + '/api/blocks/tip/height', { timeout: 3000 }); if (r.ok && /^\d+$/.test((await r.text()).trim())) { if (mempoolLocal !== c) log('local mempool detected at', c); mempoolLocal = c; return; } } catch { /* not present */ }
+  }
+  mempoolLocal = null;
+}
+
+// secrets are never sent back to the browser
+const SECRET_PATHS = [['ghostfolio', 'token'], ['bitcoin', 'rpcPass'], ['notify', 'telegramToken'], ['notify', 'ntfyToken']];
+const MASK = '••••••••';
+function maskSettings(s) {
+  if (!s || typeof s !== 'object') return s;
+  const c = JSON.parse(JSON.stringify(s));
+  for (const [a, b] of SECRET_PATHS) if (c[a] && c[a][b]) c[a][b] = MASK;
+  return c;
+}
+function keepSecrets(next, prev) {
+  for (const [a, b] of SECRET_PATHS) if (next && next[a] && next[a][b] === MASK) next[a][b] = prev && prev[a] ? prev[a][b] : '';
+  return next;
+}
+
 // ───────────────────────────── State storage ─────────────────────────────
 const STATE_FILE = path.join(DATA_DIR, 'state.json');
 const STATE_KEYS = new Set(['portfolio', 'watchlist', 'alerts', 'journal', 'settings', 'links', 'layout', 'notes']);
@@ -1330,6 +1714,7 @@ const routes = {
     ok: true, version: VERSION, uptime: Math.round((Date.now() - STARTED) / 1000), node: process.version,
     memory: Math.round(process.memoryUsage().rss / 1048576), dataWritable, dataDir: DATA_DIR, cache: cache.size,
     sources: health, time: Date.now(), newsUpdated, archive: Object.keys(archive.events).length,
+    mempool: mempoolBase(), mempoolLocal: !!mempoolLocal, node: !!btcConf(), portfolioSource: ext.source, portfolioSynced: ext.syncedAt,
   }),
   'GET /api/quotes': async q => getQuotes(cleanSymbols(q.get('s'))),
   'GET /api/spark': async q => getSpark(cleanSymbols(q.get('s'), 80), RANGES.has(q.get('range')) ? q.get('range') : '1d', INTERVALS.has(q.get('interval')) ? q.get('interval') : '15m'),
@@ -1340,6 +1725,28 @@ const routes = {
   },
   'GET /api/search': async q => { const t = String(q.get('q') || '').trim().slice(0, 40); return t.length < 1 ? [] : ySearch(t); },
   'GET /api/perf': async q => getPerf(cleanSymbols(q.get('s'), 40)),
+  'GET /api/portfolio/analysis': async q => {
+    const base = ['CZK', 'USD', 'EUR', 'GBP', 'CHF'].includes(q.get('base')) ? q.get('base') : (state.settings && state.settings.baseCurrency) || 'CZK';
+    const [bench] = cleanSymbols(q.get('bench') || '^GSPC', 1);
+    return portfolioAnalysis(base, bench || '^GSPC');
+  },
+  'GET /api/portfolio/source': async () => ({ source: ext.source, syncedAt: ext.syncedAt, url: ext.url || null, error: ext.error || null, activities: (ext.activities || []).length, accounts: ext.accounts || [], unknown: ext.unknown || [], baseCurrency: ext.baseCurrency || null, configured: !!(state.settings && state.settings.ghostfolio && state.settings.ghostfolio.token) }),
+  'GET /api/portfolio/activities': async () => allActivities(),
+  'POST /api/portfolio/import': async (q, req) => {
+    const body = await readJSON(req);
+    const conv = await convertGhostfolio(body && body.data ? body.data : body);
+    ext = { ...conv, source: 'ghostfolio-file', syncedAt: Date.now(), url: null, error: null, gfPerformance: null };
+    saveExt();
+    return { ok: true, activities: conv.activities.length, accounts: conv.accounts.length, unknown: conv.unknown };
+  },
+  'POST /api/portfolio/ghostfolio/sync': async () => ghostfolioSync(),
+  'POST /api/portfolio/external/clear': async () => { ext = { activities: [], accounts: [], source: null, syncedAt: null }; saveExt(); return { ok: true }; },
+  'GET /api/node': async () => {
+    const c = btcConf();
+    if (!c) return { configured: false };
+    try { return { configured: true, fromEnv: c.fromEnv, ...(await getNodeInfo()) }; }
+    catch (e) { mark('node', false, e.message); return { configured: true, error: e.message }; }
+  },
   'GET /api/fundamentals': async q => {
     const [s] = cleanSymbols(q.get('s'), 1);
     if (!s) throw Object.assign(new Error('missing symbol'), { status: 400 });
@@ -1380,7 +1787,7 @@ const routes = {
   'POST /api/news/refresh': async () => { cache.forEach((v, k) => { if (k.startsWith('feed:')) cache.delete(k); }); await refreshNews(); return { ok: true, count: newsItems.length }; },
   // since=-1 (or missing) → only returns the current sequence number (client baseline)
   'GET /api/events': async q => { const since = parseInt(q.get('since') ?? '-1', 10); return { last: eventSeq, events: since >= 0 ? events.filter(e => e.id > since) : [] }; },
-  'GET /api/state': async () => ({ ...state, _server: { version: VERSION, writable: dataWritable } }),
+  'GET /api/state': async () => ({ ...state, settings: maskSettings(state.settings), _server: { version: VERSION, writable: dataWritable } }),
   'POST /api/notify/test': async () => {
     const r = await notifyAll('FinTerm – test notifikace', 'Pokud vidíte tuto zprávu, notifikace fungují. ✅', { tags: 'white_check_mark' });
     return { results: r, configured: r.length };
@@ -1413,13 +1820,14 @@ async function handle(req, res) {
     if (stateKey) {
       const key = stateKey[1];
       if (!STATE_KEYS.has(key)) return sendJSON(req, res, 404, { error: 'unknown key' });
-      if (req.method === 'GET') return sendJSON(req, res, 200, state[key] ?? null);
+      if (req.method === 'GET') return sendJSON(req, res, 200, (key === 'settings' ? maskSettings(state[key]) : state[key]) ?? null);
       if (req.method === 'PUT') {
         const body = await readJSON(req);
         if (body === null || typeof body !== 'object') return sendJSON(req, res, 400, { error: 'object expected' });
-        state[key] = body;
+        state[key] = key === 'settings' ? keepSecrets(body, state.settings) : body;
         saveState();
-        if (key === 'settings') cache.forEach((v, k) => { if (k === 'cryptoglobal' || k.startsWith('mempool:')) cache.delete(k); });
+        if (key === 'settings') cache.forEach((v, k) => { if (k === 'cryptoglobal' || k === 'btcnode' || k.startsWith('mempool:') || k.startsWith('pfa:')) cache.delete(k); });
+        if (key === 'portfolio') cache.forEach((v, k) => { if (k.startsWith('pfa:')) cache.delete(k); });
         return sendJSON(req, res, 200, { ok: true, writable: dataWritable });
       }
       return sendJSON(req, res, 405, { error: 'method not allowed' });
@@ -1439,6 +1847,7 @@ async function handle(req, res) {
 try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) { log('cannot create data dir', DATA_DIR, e.message); }
 loadState();
 loadArchive();
+loadExt();
 
 const server = http.createServer((req, res) => {
   handle(req, res).catch(e => { log('fatal handler error', e); try { sendJSON(req, res, 500, { error: 'internal error' }); } catch {} });
@@ -1456,6 +1865,12 @@ setInterval(() => {
   if (active || state.settings?.notify?.breaking) refreshNews().catch(() => {});
 }, 4 * 60e3).unref();
 setInterval(() => getFF().catch(e => mark('ff', false, e.message)), 60 * 60e3).unref();
+// own infrastructure: local mempool detection, Ghostfolio auto-sync
+setTimeout(() => detectMempool().catch(() => {}), 1000);
+setInterval(() => detectMempool().catch(() => {}), 10 * 60e3).unref();
+const gfAuto = () => { const g = (state.settings && state.settings.ghostfolio) || {}; if (g.token && g.autoSync !== false) ghostfolioSync().catch(e => log('ghostfolio sync:', e.message)); };
+setTimeout(gfAuto, 6000);
+setInterval(gfAuto, 30 * 60e3).unref();
 
 process.on('unhandledRejection', e => log('unhandledRejection', e && e.message));
 for (const sig of ['SIGINT', 'SIGTERM']) {

@@ -21,6 +21,12 @@ services:
       DATA_DIR: /data
       TZ: Europe/Prague
       NODE_ENV: production
+      # own Bitcoin node (Umbrel "Bitcoin Node" app) – read-only RPC calls for the node panel;
+      # empty when the Bitcoin app is not installed, then the panel can be configured in Settings
+      BITCOIN_RPC_HOST: ${APP_BITCOIN_NODE_IP}
+      BITCOIN_RPC_PORT: ${APP_BITCOIN_RPC_PORT}
+      BITCOIN_RPC_USER: ${APP_BITCOIN_RPC_USER}
+      BITCOIN_RPC_PASS: ${APP_BITCOIN_RPC_PASS}
     volumes:
       - ${APP_DATA_DIR}/app:/app:ro
       - ${APP_DATA_DIR}/data:/data

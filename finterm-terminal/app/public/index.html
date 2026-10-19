@@ -15,69 +15,76 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
+/* Design system v2 – readability first: bigger type scale, WCAG-AA contrast for secondary text,
+   neutral headings (colour reserved for data), underline tabs, more breathing room. */
 :root{
-  --bg:#090c10;--bg2:#0c1016;--card:#11161d;--card2:#151b24;--hover:#18202b;--line:#1d2530;--line2:#283241;
-  --text:#e6edf3;--muted:#8b97a7;--dim:#5d6877;
-  --accent:#2962ff;--accent2:#5c87ff;--accent-bg:rgba(41,98,255,.14);
-  --amber:#f0a92e;--up:#1fbf75;--down:#f0444f;--up-bg:rgba(31,191,117,.13);--down-bg:rgba(240,68,79,.13);
+  --bg:#090c10;--bg2:#0c1016;--card:#11161d;--card2:#161c25;--hover:#1a212c;--line:#1f2733;--line2:#2c3646;--sep:rgba(255,255,255,.055);
+  --text:#e6edf3;--text2:#c9d2dc;--muted:#9ca8b7;--dim:#7c889a;
+  --accent:#2962ff;--accent2:#6b93ff;--accent-bg:rgba(41,98,255,.16);
+  --amber:#f0a92e;--up:#22c37f;--down:#f2525c;--up-bg:rgba(34,195,127,.14);--down-bg:rgba(242,82,92,.15);
   --info:#3fa7ff;--purple:#a371f7;
   --mono:ui-monospace,"SF Mono","Cascadia Mono","JetBrains Mono","Roboto Mono","DejaVu Sans Mono",Menlo,Consolas,monospace;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","DejaVu Sans",Arial,sans-serif;
-  --r:6px;--gap:10px;--top:3.5rem;--tape:2.3rem;--status:1.85rem;--nav:4.9rem;
+  --r:8px;--gap:12px;--pad:14px;--top:3.6rem;--tape:2.4rem;--status:1.95rem;--nav:5.4rem;
+  --fs:14px;
   --vh:calc(100dvh - var(--top) - var(--tape) - var(--status));
 }
-html{font-size:13px;background:var(--bg)}
-@media (min-width:2000px){html{font-size:14px}}
-@media (min-width:2560px){html{font-size:16px}}
-@media (min-width:3400px){html{font-size:20px}}
-body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:1rem;line-height:1.38;height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+@media (min-width:761px) and (max-width:1279px){:root{--fs:13.5px}}
+@media (min-width:1700px){:root{--fs:15px}}
+@media (min-width:2300px){:root{--fs:17px}}
+@media (min-width:2900px){:root{--fs:20px}}
+@media (min-width:3600px){:root{--fs:23px}}
+html{font-size:calc(var(--fs) * var(--ui, 1));background:var(--bg)}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:1rem;line-height:1.45;height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
 a{color:var(--accent2);text-decoration:none}
 a:hover{text-decoration:underline}
 button{font:inherit;color:inherit}
-::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar{width:9px;height:9px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:#253041;border-radius:4px}
-::-webkit-scrollbar-thumb:hover{background:#33415a}
-*{scrollbar-width:thin;scrollbar-color:#253041 transparent}
+::-webkit-scrollbar-thumb{background:#263142;border-radius:5px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:#34425a;background-clip:padding-box}
+*{scrollbar-width:thin;scrollbar-color:#263142 transparent}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 .up{color:var(--up)!important}.dn{color:var(--down)!important}.fl{color:var(--muted)}
 .muted{color:var(--muted)}.dim{color:var(--dim)}.amber{color:var(--amber)}
 .sp{flex:1}
 .nowrap{white-space:nowrap}
 .right{text-align:right}
+small{font-size:.72em}
 
 /* ── top bar ── */
-#topbar{height:var(--top);display:flex;align-items:center;gap:12px;padding:0 12px;background:var(--bg2);border-bottom:1px solid var(--line);flex-shrink:0;position:relative;z-index:30}
-.brand{font-family:var(--mono);font-weight:800;letter-spacing:.1em;font-size:1.15rem;display:flex;align-items:center;gap:8px;white-space:nowrap;cursor:pointer;user-select:none}
+#topbar{height:var(--top);display:flex;align-items:center;gap:14px;padding:0 14px;background:var(--bg2);border-bottom:1px solid var(--line);flex-shrink:0;position:relative;z-index:30}
+.brand{font-family:var(--mono);font-weight:800;letter-spacing:.1em;font-size:1.12rem;display:flex;align-items:center;gap:9px;white-space:nowrap;cursor:pointer;user-select:none}
 .brand b{color:var(--accent2)}
-.brand svg{width:1.7rem;height:1.7rem}
-#cmdwrap{position:relative;flex:1;max-width:640px;min-width:160px;display:flex;align-items:center;background:var(--bg);border:1px solid var(--line2);border-radius:var(--r);height:2.3rem}
-#cmdwrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(41,98,255,.18)}
-.cmd-p{color:var(--amber);font-family:var(--mono);padding:0 8px 0 10px;font-weight:800}
-#cmd{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--text);font-family:var(--mono);font-size:.98rem;text-transform:uppercase;height:100%;letter-spacing:.03em}
-#cmd::placeholder{text-transform:none;color:var(--dim);letter-spacing:0}
-.go{background:var(--amber);color:#111;font-family:var(--mono);font-weight:800;font-size:.75rem;padding:3px 9px;border-radius:4px;margin-right:4px;cursor:pointer;border:0}
-#cmd-dd{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 14px 40px rgba(0,0,0,.6);z-index:60;max-height:65vh;overflow:auto;display:none}
+.brand svg{width:1.75rem;height:1.75rem}
+#cmdwrap{position:relative;flex:1;max-width:660px;min-width:160px;display:flex;align-items:center;background:var(--bg);border:1px solid var(--line2);border-radius:var(--r);height:2.45rem}
+#cmdwrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(41,98,255,.2)}
+.cmd-p{color:var(--amber);font-family:var(--mono);padding:0 8px 0 12px;font-weight:800}
+#cmd{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--text);font-family:var(--mono);font-size:.95rem;text-transform:uppercase;height:100%;letter-spacing:.03em}
+#cmd::placeholder{text-transform:none;color:var(--dim);letter-spacing:0;font-family:var(--sans)}
+.go{background:var(--amber);color:#111;font-family:var(--mono);font-weight:800;font-size:.76rem;padding:4px 10px;border-radius:5px;margin-right:5px;cursor:pointer;border:0}
+#cmd-dd{position:absolute;top:calc(100% + 5px);left:0;right:0;background:var(--card2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 16px 44px rgba(0,0,0,.6);z-index:60;max-height:65vh;overflow:auto;display:none;padding:4px 0}
 #cmd-dd.open{display:block}
-.dd-h{padding:6px 10px 3px;font-size:.68rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;font-weight:700}
-.dd-i{display:flex;gap:10px;align-items:center;padding:6px 10px;cursor:pointer;font-size:.9rem}
+.dd-h{padding:8px 12px 4px;font-size:.72rem;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;font-weight:700}
+.dd-i{display:flex;gap:12px;align-items:center;padding:7px 12px;cursor:pointer;font-size:.92rem}
 .dd-i.sel,.dd-i:hover{background:var(--accent-bg)}
 .dd-k{font-family:var(--mono);color:var(--amber);min-width:7rem;font-weight:700;white-space:nowrap}
-.dd-d{color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dd-t{font-size:.7rem;color:var(--dim);text-transform:uppercase;white-space:nowrap}
-#sessions{display:flex;gap:4px;margin-left:auto;overflow:hidden;flex-shrink:1;min-width:0}
-.sess{font-family:var(--mono);font-size:.74rem;padding:3px 7px;border:1px solid var(--line);border-radius:4px;color:var(--muted);white-space:nowrap;cursor:default}
-.sess i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--dim);margin-right:5px;vertical-align:1px}
+.dd-d{color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dd-t{font-size:.74rem;color:var(--dim);white-space:nowrap}
+#sessions{display:flex;gap:5px;margin-left:auto;overflow:hidden;flex-shrink:1;min-width:0}
+.sess{font-family:var(--mono);font-size:.78rem;padding:3px 8px;border:1px solid var(--line);border-radius:5px;color:var(--muted);white-space:nowrap;cursor:default}
+.sess i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--dim);margin-right:6px;vertical-align:1px}
 .sess.open i{background:var(--up);box-shadow:0 0 6px var(--up)}
 .sess.pre i,.sess.post i,.sess.break i{background:var(--amber)}
 .sess b{color:var(--text);font-weight:600;margin-left:3px}
 .tb{display:flex;gap:4px;align-items:center}
-.ib{width:2.3rem;height:2.3rem;display:grid;place-items:center;border-radius:var(--r);background:none;border:1px solid transparent;color:var(--muted);cursor:pointer;font-size:1.05rem}
+.ib{width:2.4rem;height:2.4rem;display:grid;place-items:center;border-radius:var(--r);background:none;border:1px solid transparent;color:var(--muted);cursor:pointer;font-size:1.05rem}
 .ib:hover{color:var(--text);background:var(--hover);border-color:var(--line2)}
 .ib.on{color:var(--amber)}
-.ib svg{width:1.15rem;height:1.15rem;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-#conn{width:9px;height:9px;border-radius:50%;background:var(--dim);margin:0 4px}
+.ib svg{width:1.2rem;height:1.2rem;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ib .aa{font-weight:800;font-size:.82rem;letter-spacing:-.02em}
+#conn{width:9px;height:9px;border-radius:50%;background:var(--dim);margin:0 6px}
 #conn.ok{background:var(--up);box-shadow:0 0 8px var(--up)}#conn.err{background:var(--down)}
 
 /* ── ticker tape ── */
@@ -85,21 +92,22 @@ button{font:inherit;color:inherit}
 #tape-track{display:flex;white-space:nowrap;will-change:transform;animation:tape var(--tape-dur,120s) linear infinite}
 #tape:hover #tape-track{animation-play-state:paused}
 @keyframes tape{from{transform:translate3d(0,0,0)}to{transform:translate3d(-50%,0,0)}}
-.ti{display:inline-flex;gap:8px;align-items:baseline;padding:0 18px;font-family:var(--mono);font-size:.86rem;border-right:1px solid var(--line);cursor:pointer;font-variant-numeric:tabular-nums}
+.ti{display:inline-flex;gap:9px;align-items:baseline;padding:0 20px;font-family:var(--mono);font-size:.9rem;border-right:1px solid var(--line);cursor:pointer;font-variant-numeric:tabular-nums}
 .ti .l{color:var(--amber);font-weight:700}
-.ti .lv{width:5px;height:5px;border-radius:50%;background:var(--up);align-self:center;box-shadow:0 0 5px var(--up)}
+.lv{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--up);box-shadow:0 0 5px var(--up);vertical-align:2px;margin-right:6px}
+.ti .lv{align-self:center;margin:0}
 body.lite #tape-track{animation:none}
 body.lite #tape{overflow-x:auto}
 
 /* ── layout ── */
 #layout{flex:1;display:flex;min-height:0}
-#nav{width:var(--nav);background:var(--bg2);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:6px 0;gap:2px;flex-shrink:0;overflow-y:auto}
-.nav-b{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 3px;color:var(--muted);background:none;border:0;border-left:2px solid transparent;cursor:pointer;font-size:.66rem;font-weight:700;letter-spacing:.07em;position:relative;text-transform:uppercase}
-.nav-b svg{width:1.5rem;height:1.5rem;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+#nav{width:var(--nav);background:var(--bg2);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:8px 0;gap:2px;flex-shrink:0;overflow-y:auto}
+.nav-b{display:flex;flex-direction:column;align-items:center;gap:6px;padding:11px 4px;color:var(--muted);background:none;border:0;border-left:3px solid transparent;cursor:pointer;font-size:.74rem;font-weight:650;letter-spacing:.03em;position:relative}
+.nav-b svg{width:1.55rem;height:1.55rem;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .nav-b:hover{color:var(--text);background:var(--hover)}
 .nav-b.active{color:#fff;border-left-color:var(--accent);background:var(--accent-bg)}
 .nav-b.active svg{stroke:var(--accent2)}
-.nav-b .k{position:absolute;top:3px;right:5px;font-size:.58rem;color:var(--dim);font-family:var(--mono)}
+.nav-b .k{position:absolute;top:4px;right:6px;font-size:.66rem;color:var(--dim);font-family:var(--mono)}
 .nav-b .bd{position:absolute;top:6px;left:58%;min-width:8px;height:8px;border-radius:5px;background:var(--down)}
 #main{flex:1;min-width:0;overflow:auto;position:relative}
 .page{display:none;padding:var(--gap)}
@@ -107,289 +115,307 @@ body.lite #tape{overflow-x:auto}
 
 /* ── cards, grids ── */
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
-.card-h{display:flex;align-items:center;gap:8px;padding:0 10px;min-height:2.6rem;border-bottom:1px solid var(--line);flex-shrink:0;flex-wrap:wrap}
-.card-t{font-family:var(--mono);font-size:.78rem;font-weight:800;letter-spacing:.09em;color:var(--amber);text-transform:uppercase;white-space:nowrap}
-.card-s{color:var(--dim);font-size:.76rem;white-space:nowrap}
-.card-b{padding:10px;overflow:auto;flex:1;min-height:0}
+.card-h{display:flex;align-items:center;gap:10px;padding:0 var(--pad);min-height:2.95rem;border-bottom:1px solid var(--line);flex-shrink:0;flex-wrap:wrap}
+.card-t{font-family:var(--sans);font-size:.95rem;font-weight:650;color:var(--text);white-space:nowrap;display:inline-flex;align-items:center;gap:9px}
+.card-t::before{content:'';width:3px;height:1em;border-radius:2px;background:var(--accent)}
+.card-s{color:var(--dim);font-size:.8rem;white-space:nowrap}
+.card-b{padding:var(--pad);overflow:auto;flex:1;min-height:0}
 .card-b.np{padding:0}
 .grid{display:grid;gap:var(--gap)}
 .g2{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g4{grid-template-columns:repeat(4,minmax(0,1fr))}.g6{grid-template-columns:repeat(6,minmax(0,1fr))}
 .auto{grid-template-columns:repeat(auto-fill,minmax(var(--min,280px),1fr))}
 .mb{margin-bottom:var(--gap)}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.col{display:flex;flex-direction:column;gap:6px}
-.full-h{height:calc(var(--vh) - 2*var(--gap) - 3.2rem);min-height:420px}
+.col{display:flex;flex-direction:column;gap:var(--gap)}
+.full-h{height:calc(var(--vh) - 2*var(--gap) - 3.4rem);min-height:420px}
 
-/* ── tabs ── */
-.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;align-items:center}
+/* ── tabs: underline = navigation, pill (seg) = view option, chip = filter ── */
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;align-items:stretch}
 .tabs::-webkit-scrollbar{display:none}
-.tab{background:none;border:0;color:var(--muted);padding:4px 9px;font-size:.8rem;border-radius:4px;cursor:pointer;white-space:nowrap;font-weight:600}
-.tab:hover{color:var(--text);background:var(--hover)}
-.tab.active{color:#fff;background:var(--accent)}
-.subnav{display:flex;gap:8px;align-items:center;margin-bottom:var(--gap);flex-wrap:wrap}
-.subnav>.tabs{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:3px}
-.subnav .tab{padding:5px 11px;font-size:.85rem}
-.seg{display:inline-flex;background:var(--bg);border:1px solid var(--line2);border-radius:5px;padding:2px;gap:2px}
-.seg button{background:none;border:0;color:var(--muted);padding:2px 8px;border-radius:3px;cursor:pointer;font-size:.76rem;font-weight:700;font-family:var(--mono)}
+.tab{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);padding:.5rem .75rem;font-size:.88rem;cursor:pointer;white-space:nowrap;font-weight:600}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);border-bottom-color:var(--accent)}
+.card-h .tabs .tab{padding:.75rem .7rem calc(.75rem - 2px)}
+.subnav{display:flex;gap:12px;align-items:center;margin-bottom:var(--gap);flex-wrap:wrap}
+.subnav>.tabs{border-bottom:1px solid var(--line)}
+.subnav .tab{padding:.6rem .95rem;font-size:.96rem;margin-bottom:-1px}
+.seg{display:inline-flex;background:var(--bg);border:1px solid var(--line2);border-radius:6px;padding:2px;gap:2px}
+.seg button{background:none;border:0;color:var(--muted);padding:3px 9px;border-radius:4px;cursor:pointer;font-size:.8rem;font-weight:700;font-family:var(--mono)}
 .seg button.active{background:var(--line2);color:var(--text)}
 .seg button:hover{color:var(--text)}
 
 /* ── tables ── */
-table.t{width:100%;border-collapse:collapse;font-size:.88rem}
-.t th{position:sticky;top:0;background:var(--card2);color:var(--dim);font-weight:700;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:1}
-.t td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;font-family:var(--mono);font-variant-numeric:tabular-nums}
+table.t{width:100%;border-collapse:collapse;font-size:.92rem}
+.t th{position:sticky;top:0;background:var(--card2);color:var(--dim);font-weight:600;font-size:.74rem;text-transform:uppercase;letter-spacing:.04em;text-align:right;padding:.55rem .75rem;border-bottom:1px solid var(--line);white-space:nowrap;z-index:1}
+.t td{padding:.52rem .75rem;border-bottom:1px solid var(--sep);text-align:right;white-space:nowrap;font-family:var(--mono);font-variant-numeric:tabular-nums}
 .t th:first-child,.t td:first-child,.t .l{text-align:left}
 .t .c{text-align:center}
 .t tbody tr:hover td{background:var(--hover)}
 .t tr.click{cursor:pointer}
-.t tr.sec td{background:var(--bg2);color:var(--dim);font-family:var(--sans);font-size:.7rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:5px 8px}
+.t tr.sec td{background:transparent;color:var(--muted);font-family:var(--sans);font-size:.74rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1rem .75rem .4rem;border-bottom:1px solid var(--line)}
+.t tr.sec:hover td{background:transparent}
 .t th.sort{cursor:pointer}.t th.sort:hover{color:var(--text)}
-.t.compact td{padding:3px 8px}
+.t.compact td{padding:.36rem .75rem}
 .sym{font-weight:700;color:var(--text);font-family:var(--mono)}
-.nm{font-family:var(--sans);color:var(--dim);font-size:.75rem;display:block;max-width:15rem;overflow:hidden;text-overflow:ellipsis}
-.t td.tdn{font-family:var(--sans);color:var(--muted);font-size:.8rem;max-width:16rem;overflow:hidden;text-overflow:ellipsis}
+.nm{font-family:var(--sans);color:var(--dim);font-size:.8rem;display:block;max-width:15rem;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.t td.tdn{font-family:var(--sans);color:var(--muted);font-size:.84rem;max-width:16rem;overflow:hidden;text-overflow:ellipsis}
+.pill{display:inline-block;min-width:5.2em;padding:2px 7px;border-radius:5px;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.pill.up{background:var(--up-bg)}.pill.dn{background:var(--down-bg)}.pill.fl{background:rgba(255,255,255,.04)}
+@media (hover:hover){.t .des{opacity:0;transition:opacity .15s}.t tr:hover .des{opacity:1}}
 .fu1{animation:fu1 .9s}.fu2{animation:fu2 .9s}.fd1{animation:fd1 .9s}.fd2{animation:fd2 .9s}
-@keyframes fu1{0%{background:rgba(31,191,117,.38)}100%{background:transparent}}
-@keyframes fu2{0%{background:rgba(31,191,117,.38)}100%{background:transparent}}
-@keyframes fd1{0%{background:rgba(240,68,79,.38)}100%{background:transparent}}
-@keyframes fd2{0%{background:rgba(240,68,79,.38)}100%{background:transparent}}
+@keyframes fu1{0%{background:rgba(34,195,127,.38)}100%{background:transparent}}
+@keyframes fu2{0%{background:rgba(34,195,127,.38)}100%{background:transparent}}
+@keyframes fd1{0%{background:rgba(242,82,92,.38)}100%{background:transparent}}
+@keyframes fd2{0%{background:rgba(242,82,92,.38)}100%{background:transparent}}
 body.lite .fu1,body.lite .fu2,body.lite .fd1,body.lite .fd2{animation:none}
 .spk{display:inline-block;vertical-align:middle}
-.bar52{position:relative;width:80px;height:6px;background:var(--line2);border-radius:3px;display:inline-block;vertical-align:middle}
+.bar52{position:relative;width:84px;height:6px;background:var(--line2);border-radius:3px;display:inline-block;vertical-align:middle}
 .bar52 i{position:absolute;top:-2px;width:3px;height:10px;background:var(--amber);border-radius:1px;transform:translateX(-50%)}
 
 /* ── controls ── */
-.btn{background:var(--card2);border:1px solid var(--line2);color:var(--text);padding:5px 11px;border-radius:5px;cursor:pointer;font-size:.85rem;font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.btn{background:var(--card2);border:1px solid var(--line2);color:var(--text);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.88rem;font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
 .btn:hover{border-color:var(--accent)}
 .btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn.pri:hover{background:#3b6fff}
-.btn.sm{padding:2px 8px;font-size:.76rem}
-.btn.ghost{background:none;border-color:transparent}
-.btn.ghost:hover{border-color:var(--line2)}
+.btn.sm{padding:3px 9px;font-size:.8rem}
+.btn.ghost{background:none;border-color:transparent;color:var(--text2)}
+.btn.ghost:hover{border-color:var(--line2);color:var(--text)}
 .btn.danger:hover{border-color:var(--down);color:var(--down)}
 .btn:disabled{opacity:.5;cursor:default}
-.in{background:var(--bg);border:1px solid var(--line2);color:var(--text);padding:5px 8px;border-radius:5px;font-size:.9rem;font-family:inherit;min-width:0;height:2.15rem}
-textarea.in{height:auto;min-height:5rem;resize:vertical;line-height:1.4}
+.in{background:var(--bg);border:1px solid var(--line2);color:var(--text);padding:6px 10px;border-radius:6px;font-size:.92rem;font-family:inherit;min-width:0;height:2.3rem}
+textarea.in{height:auto;min-height:5rem;resize:vertical;line-height:1.45}
 .in:focus{outline:0;border-color:var(--accent)}
+.in::placeholder{color:var(--dim)}
 select.in{padding-right:4px}
-label.f{display:flex;flex-direction:column;gap:3px;font-size:.74rem;color:var(--muted);font-weight:600;min-width:0}
-label.chk{display:inline-flex;gap:6px;align-items:center;font-size:.82rem;color:var(--muted);cursor:pointer;white-space:nowrap}
-label.chk input{accent-color:var(--accent)}
-.form{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;align-items:end}
-.chips{display:flex;gap:4px;flex-wrap:wrap}
-.chip{background:var(--bg);border:1px solid var(--line2);color:var(--muted);padding:2px 8px;border-radius:12px;font-size:.76rem;cursor:pointer;font-weight:700;font-family:var(--mono);user-select:none}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--muted);font-weight:600;min-width:0}
+label.chk{display:inline-flex;gap:7px;align-items:center;font-size:.86rem;color:var(--muted);cursor:pointer;white-space:nowrap}
+label.chk input{accent-color:var(--accent);width:15px;height:15px}
+.form{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;align-items:end}
+.chips{display:flex;gap:5px;flex-wrap:wrap}
+.chip{background:var(--bg);border:1px solid var(--line2);color:var(--muted);padding:3px 10px;border-radius:14px;font-size:.8rem;cursor:pointer;font-weight:700;font-family:var(--mono);user-select:none}
 .chip:hover{color:var(--text)}
 .chip.on{background:var(--accent-bg);border-color:var(--accent);color:#fff}
-.badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:.68rem;font-weight:800;font-family:var(--mono);background:var(--line);color:var(--muted);vertical-align:1px;white-space:nowrap}
+.badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:.72rem;font-weight:700;font-family:var(--mono);background:var(--line);color:var(--muted);vertical-align:1px;white-space:nowrap}
 .badge.live{background:var(--up-bg);color:var(--up)}
 .badge.warn{background:rgba(240,169,46,.15);color:var(--amber)}
 .badge.err{background:var(--down-bg);color:var(--down)}
 .badge.blue{background:var(--accent-bg);color:var(--accent2)}
-.note{font-size:.78rem;color:var(--dim);line-height:1.45}
-.empty{padding:28px;text-align:center;color:var(--dim);font-size:.9rem}
-.loading{padding:24px;text-align:center;color:var(--dim)}
-.loading::after{content:'';display:inline-block;width:12px;height:12px;border:2px solid var(--line2);border-top-color:var(--accent);border-radius:50%;margin-left:8px;vertical-align:-2px;animation:spin .8s linear infinite}
+.note{font-size:.84rem;color:var(--dim);line-height:1.55}
+.empty{padding:32px;text-align:center;color:var(--dim);font-size:.94rem;line-height:1.6}
+.loading{padding:28px;text-align:center;color:var(--dim)}
+.loading::after{content:'';display:inline-block;width:13px;height:13px;border:2px solid var(--line2);border-top-color:var(--accent);border-radius:50%;margin-left:9px;vertical-align:-2px;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-hr.sep{border:0;border-top:1px solid var(--line);margin:10px 0}
+hr.sep{border:0;border-top:1px solid var(--line);margin:12px 0}
 
 /* ── KPIs ── */
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;display:flex;flex-direction:column;gap:3px;min-width:0}
-.kpi .k{font-size:.7rem;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.kpi .v{font-family:var(--mono);font-size:1.4rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
-.kpi .s{font-size:.78rem;color:var(--muted);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mini{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--line);gap:8px;font-size:.86rem}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px var(--pad);display:flex;flex-direction:column;gap:4px;min-width:0}
+.kpi .k{font-size:.76rem;color:var(--muted);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .v{font-family:var(--mono);font-size:1.45rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.kpi .v.g{color:var(--up)}.kpi .v.b{color:var(--down)}.kpi .v.m{color:var(--amber)}
+.kpi .s{font-size:.82rem;color:var(--dim);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini{display:flex;justify-content:space-between;align-items:baseline;padding:.42rem 0;border-bottom:1px solid var(--sep);gap:10px;font-size:.92rem}
 .mini:last-child{border-bottom:0}
-.mini .k{color:var(--muted);white-space:nowrap}
+.mini .k{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mini .v{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
 
 /* ── charts ── */
 .chart{position:relative;width:100%;height:100%;min-height:140px;touch-action:pan-y}
 .chart canvas{position:absolute;inset:0;width:100%;height:100%}
-.chart-tip{position:absolute;pointer-events:none;background:rgba(9,12,16,.94);border:1px solid var(--line2);border-radius:4px;padding:5px 8px;font-family:var(--mono);font-size:.74rem;white-space:nowrap;display:none;z-index:3;line-height:1.5}
-.tv-ph{height:100%;min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);text-align:center;padding:20px}
+.chart-tip{position:absolute;pointer-events:none;background:rgba(9,12,16,.95);border:1px solid var(--line2);border-radius:6px;padding:6px 9px;font-family:var(--mono);font-size:.8rem;white-space:nowrap;display:none;z-index:3;line-height:1.55}
+.tv-ph{height:100%;min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--muted);text-align:center;padding:20px}
 .tvbox{width:100%;height:100%}
 .tvbox .tradingview-widget-container,.tvbox .tradingview-widget-container__widget{width:100%;height:100%}
 .gauge{display:flex;flex-direction:column;align-items:center}
-.gauge .g-l{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-top:-2px}
+.gauge .g-l{font-size:.78rem;font-weight:700;margin-top:-2px;text-align:center}
 .tm{position:relative;width:100%;height:100%;overflow:hidden}
 .tm-n{position:absolute;overflow:hidden;border:1px solid var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;font-family:var(--mono);line-height:1.15;cursor:pointer}
 .tm-n:hover{outline:2px solid #fff;outline-offset:-2px;z-index:2}
 .tm-n b{font-weight:800}
-.legend{display:flex;flex-direction:column;gap:4px;font-size:.8rem}
-.legend div{display:flex;gap:6px;align-items:center}
-.legend i{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.legend{display:flex;flex-direction:column;gap:5px;font-size:.86rem}
+.legend div{display:flex;gap:7px;align-items:center}
+.legend i{width:11px;height:11px;border-radius:3px;flex-shrink:0}
 .legend .v{margin-left:auto;font-family:var(--mono);color:var(--muted)}
-.hbar{display:grid;grid-template-columns:5.5rem 1fr 4.8rem;gap:8px;align-items:center;font-size:.84rem;padding:3px 0}
-.hbar .tr{position:relative;height:16px;background:var(--bg);border-radius:3px}
+.hbar{display:grid;grid-template-columns:7.5rem 1fr 5rem;gap:10px;align-items:center;font-size:.9rem;padding:4px 0}
+.hbar .tr{position:relative;height:16px;background:var(--bg);border-radius:4px}
 .hbar .tr .z{position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line2)}
-.hbar .tr i{position:absolute;top:2px;bottom:2px;border-radius:2px}
+.hbar .tr i{position:absolute;top:2px;bottom:2px;border-radius:3px}
 .hbar .vv{text-align:right;font-family:var(--mono)}
 
 /* ── market page ── */
-.mk-grid{display:grid;gap:var(--gap);grid-template-columns:minmax(0,1fr) minmax(340px,25%);grid-template-rows:minmax(420px,calc(var(--vh) - 2*var(--gap) - var(--gap) - 290px)) 290px}
+.mk-grid{display:grid;gap:var(--gap);grid-template-columns:minmax(0,1fr) minmax(360px,26%);grid-template-rows:minmax(420px,calc(var(--vh) - 3*var(--gap) - 21rem)) 21rem}
 .mk-chart{grid-column:1;grid-row:1}
 .mk-watch{grid-column:2;grid-row:1/span 2}
 .mk-bottom{grid-column:1;grid-row:2;display:grid;gap:var(--gap);grid-template-columns:repeat(4,minmax(0,1fr));min-height:0}
 .mk-multi{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:2px;height:100%;background:var(--line)}
 .mk-multi>div{background:var(--card);min-height:0}
 .nchart{display:flex;flex-direction:column;height:100%}
-.nchart .bar{display:flex;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-.nchart .cv{flex:1;min-height:0;padding:4px 0 0}
-.qhdr{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-.qhdr .p{font-family:var(--mono);font-size:1.25rem;font-weight:800}
-.sess-t td{font-size:.82rem}
-.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--dim);margin-right:6px;vertical-align:1px}
+.nchart .bar{display:flex;gap:10px;align-items:center;padding:8px var(--pad);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.nchart .cv{flex:1;min-height:0;padding:6px 0 0}
+.qhdr{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.qhdr .p{font-family:var(--mono);font-size:1.4rem;font-weight:800}
+.sess-t td{font-size:.88rem}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--dim);margin-right:7px;vertical-align:1px}
 .dot.open{background:var(--up);box-shadow:0 0 6px var(--up)}.dot.pre,.dot.post,.dot.break{background:var(--amber)}.dot.err{background:var(--down)}
 
 /* ── news ── */
-.breaking{display:flex;align-items:center;gap:10px;background:linear-gradient(90deg,rgba(240,68,79,.16),rgba(240,68,79,.03));border:1px solid rgba(240,68,79,.35);border-radius:var(--r);height:2.4rem;overflow:hidden;margin-bottom:var(--gap);padding-left:8px}
-.live-b{background:var(--down);color:#fff;font-weight:800;font-family:var(--mono);font-size:.72rem;padding:2px 7px;border-radius:3px;animation:pulse 1.6s infinite;flex-shrink:0}
+.breaking{display:flex;align-items:center;gap:12px;background:linear-gradient(90deg,rgba(242,82,92,.15),rgba(242,82,92,.03));border:1px solid rgba(242,82,92,.32);border-radius:var(--r);height:2.6rem;overflow:hidden;margin-bottom:var(--gap);padding-left:10px}
+.live-b{background:var(--down);color:#fff;font-weight:800;font-family:var(--mono);font-size:.74rem;padding:3px 8px;border-radius:4px;animation:pulse 1.6s infinite;flex-shrink:0}
 @keyframes pulse{50%{opacity:.55}}
 body.lite .live-b{animation:none}
 .br-wrap{flex:1;overflow:hidden;min-width:0;height:100%;display:flex;align-items:center}
 .br-track{display:flex;white-space:nowrap;animation:tape var(--br-dur,90s) linear infinite}
 .br-wrap:hover .br-track{animation-play-state:paused}
 body.lite .br-track{animation:none}
-.br-i{padding:0 22px;font-size:.9rem;border-right:1px solid rgba(240,68,79,.25)}
-.br-i b{color:#ff8a92;font-family:var(--mono);font-size:.78rem;margin-right:6px}
+.br-i{padding:0 24px;font-size:.94rem;border-right:1px solid rgba(242,82,92,.25)}
+.br-i b{color:#ff9aa1;font-family:var(--mono);font-size:.8rem;margin-right:8px}
 .br-i a{color:var(--text)}
-.news-cols{display:grid;gap:var(--gap);grid-template-columns:repeat(var(--cols,4),minmax(0,1fr));height:calc(var(--vh) - 2*var(--gap) - 6.2rem);min-height:480px}
+.news-cols{display:grid;gap:var(--gap);grid-template-columns:repeat(var(--cols,4),minmax(0,1fr));height:calc(var(--vh) - 2*var(--gap) - 7rem);min-height:480px}
 .news-cols .card-b{padding:0}
-.ni{padding:7px 10px 8px;border-bottom:1px solid var(--line);border-left:3px solid transparent}
+.ni{padding:.75rem var(--pad) .8rem;border-bottom:1px solid var(--sep);border-left:3px solid transparent}
 .ni:hover{background:var(--hover)}
 .ni.hi{border-left-color:var(--down)}.ni.md{border-left-color:var(--amber)}
-.ni .meta{display:flex;gap:6px;align-items:center;font-size:.7rem;color:var(--dim);margin-bottom:2px;flex-wrap:wrap}
+.ni .meta{display:flex;gap:8px;align-items:center;font-size:.78rem;color:var(--dim);margin-bottom:4px;flex-wrap:wrap;line-height:1.3}
 .ni .meta .tm2{font-family:var(--mono);color:var(--muted)}
-.ni .src{color:var(--accent2);font-weight:700}
-.ni .tt{font-size:.92rem;line-height:1.32;color:var(--text);display:block}
-.ni .tt:visited{color:#aab4c2}
-.ni.new .tt::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--amber);margin-right:6px;vertical-align:2px}
-.ni .sm{font-size:.8rem;color:var(--muted);margin-top:3px;line-height:1.4}
-.ni .trl{margin-left:auto;font-size:.66rem;color:var(--dim)}
-.tag{font-size:.6rem;padding:0 4px;border-radius:2px;background:var(--line);color:var(--muted);font-weight:800;font-family:var(--mono);cursor:pointer;letter-spacing:.02em}
-.tag.r{background:var(--down-bg);color:#ff8a92}.tag.a{background:rgba(240,169,46,.14);color:var(--amber)}.tag.b{background:var(--accent-bg);color:var(--accent2)}.tag.g{background:var(--up-bg);color:var(--up)}
-.rg{font-size:.6rem;font-weight:800;padding:0 4px;border-radius:2px;font-family:var(--mono);color:#fff}
+.ni .src{color:var(--accent2);font-weight:650}
+.ni .tt{font-size:1rem;line-height:1.4;color:var(--text);display:block;font-weight:500}
+.ni .tt:visited{color:#aeb8c5}
+.ni.new .tt::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--amber);margin-right:7px;vertical-align:2px}
+.ni .sm{font-size:.88rem;color:var(--muted);margin-top:5px;line-height:1.5}
+.ni .trl{margin-left:auto;font-size:.74rem;color:var(--dim)}
+.tag{font-size:.7rem;padding:1px 6px;border-radius:4px;background:var(--line);color:var(--muted);font-weight:700;font-family:var(--mono);cursor:pointer;letter-spacing:.02em}
+.tag.r{background:var(--down-bg);color:#ff9aa1}.tag.a{background:rgba(240,169,46,.13);color:#f5bd5a}.tag.b{background:var(--accent-bg);color:var(--accent2)}.tag.g{background:var(--up-bg);color:#5fd8a3}
+.rg{font-size:.7rem;font-weight:800;padding:1px 5px;border-radius:4px;font-family:var(--mono);color:#fff}
 .rg.cz{background:#11457e}.rg.us{background:#7a1f2b}.rg.world{background:#1f5d4a}
 
 /* ── calendar ── */
-.imp{display:inline-flex;gap:2px;align-items:flex-end;height:12px;vertical-align:-1px}
-.imp i{width:4px;background:var(--line2);border-radius:1px}
-.imp i:nth-child(1){height:5px}.imp i:nth-child(2){height:8px}.imp i:nth-child(3){height:12px}
+.imp{display:inline-flex;gap:2px;align-items:flex-end;height:14px;vertical-align:-2px}
+.imp i{width:5px;background:var(--line2);border-radius:1px}
+.imp i:nth-child(1){height:6px}.imp i:nth-child(2){height:10px}.imp i:nth-child(3){height:14px}
 .imp.High i{background:var(--down)}
 .imp.Medium i:nth-child(-n+2){background:var(--amber)}
 .imp.Low i:nth-child(1){background:#c9b94a}
 .imp.Holiday i{background:var(--purple)}
-.cc{font-family:var(--mono);font-weight:800;font-size:.72rem;padding:1px 5px;border-radius:3px;background:var(--line);color:var(--muted)}
-.cc.USD{background:#1c2b4d;color:#8fb4ff}.cc.EUR{background:#1d2f5c;color:#ffd23f}.cc.CZK{background:#11457e;color:#fff}.cc.GBP{background:#3b1d2b;color:#ff9fb5}.cc.JPY{background:#3d1f1f;color:#ff8a80}.cc.CNY{background:#4a1515;color:#ffd166}.cc.CAD{background:#3a1d1d;color:#ffb3b3}.cc.AUD{background:#16304a;color:#9ad1ff}.cc.CHF{background:#3d1c1c;color:#fff}.cc.NZD{background:#1b2a3a;color:#b3d4ff}
-tr.done td{opacity:.55}
-tr.nextev td{background:rgba(41,98,255,.1)!important}
+.cc{font-family:var(--mono);font-weight:800;font-size:.76rem;padding:2px 6px;border-radius:4px;background:var(--line);color:var(--muted)}
+.cc.USD{background:#1c2b4d;color:#9cbcff}.cc.EUR{background:#1d2f5c;color:#ffd23f}.cc.CZK{background:#11457e;color:#fff}.cc.GBP{background:#3b1d2b;color:#ffa8bb}.cc.JPY{background:#3d1f1f;color:#ff9a90}.cc.CNY{background:#4a1515;color:#ffd166}.cc.CAD{background:#3a1d1d;color:#ffbcbc}.cc.AUD{background:#16304a;color:#a3d5ff}.cc.CHF{background:#3d1c1c;color:#fff}.cc.NZD{background:#1b2a3a;color:#bcd9ff}
+tr.done td{opacity:.5}
+tr.nextev td{background:rgba(41,98,255,.11)!important}
 tr.nowline td{padding:0!important;height:2px;background:var(--accent)!important;border:0}
 .cdown{font-family:var(--mono);color:var(--amber);font-weight:700}
-.cb-card .rate{font-family:var(--mono);font-size:2rem;font-weight:800}
-.mtile{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;cursor:pointer;display:flex;flex-direction:column;gap:2px;min-width:0}
+.cb-card .rate{font-family:var(--mono);font-size:2.1rem;font-weight:800}
+.mtile{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px var(--pad);cursor:pointer;display:flex;flex-direction:column;gap:3px;min-width:0}
 .mtile:hover{border-color:var(--line2);background:var(--card2)}
-.mtile .k{font-size:.74rem;color:var(--muted);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mtile .v{font-family:var(--mono);font-size:1.3rem;font-weight:800}
-.mtile .s{font-size:.72rem;color:var(--dim);display:flex;justify-content:space-between;gap:6px}
-.grp-h{font-family:var(--mono);font-size:.75rem;font-weight:800;color:var(--amber);letter-spacing:.09em;text-transform:uppercase;margin:14px 0 6px}
+.mtile .k{font-size:.84rem;color:var(--text2);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mtile .v{font-family:var(--mono);font-size:1.4rem;font-weight:800}
+.mtile .s{font-size:.78rem;color:var(--dim);display:flex;justify-content:space-between;gap:6px}
+.grp-h{font-family:var(--sans);font-size:.8rem;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin:20px 0 10px;padding-bottom:7px;border-bottom:1px solid var(--line)}
 
 /* ── crypto ── */
-.ctile{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;cursor:pointer;min-width:0}
+.ctile{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px var(--pad);cursor:pointer;min-width:0}
 .ctile:hover{border-color:var(--line2)}
-.ctile .h{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
-.ctile .p{font-family:var(--mono);font-size:1.3rem;font-weight:800;margin:3px 0;font-variant-numeric:tabular-nums}
-.ctile .s{font-family:var(--mono);font-size:.74rem;color:var(--dim)}
+.ctile .h{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.ctile .p{font-family:var(--mono);font-size:1.4rem;font-weight:800;margin:5px 0 3px;font-variant-numeric:tabular-nums}
+.ctile .s{font-family:var(--mono);font-size:.8rem;color:var(--dim)}
 .prog{height:8px;background:var(--bg);border-radius:4px;overflow:hidden;border:1px solid var(--line)}
 .prog i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2))}
-.fee{flex:1;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:8px;text-align:center;min-width:0}
-.fee .v{font-family:var(--mono);font-size:1.25rem;font-weight:800}
-.fee .k{font-size:.68rem;color:var(--dim);text-transform:uppercase;font-weight:700}
-.coin-i{width:18px;height:18px;border-radius:50%;vertical-align:-4px;margin-right:6px;background:var(--line)}
+.fee{flex:1;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:9px;text-align:center;min-width:0}
+.fee .v{font-family:var(--mono);font-size:1.3rem;font-weight:800}
+.fee .k{font-size:.74rem;color:var(--dim);font-weight:600}
+.coin-i{width:19px;height:19px;border-radius:50%;vertical-align:-4px;margin-right:7px;background:var(--line)}
 
-.split{display:grid;gap:var(--gap);grid-template-columns:minmax(0,1fr) 330px}
-.sugg{position:absolute;top:calc(100% + 3px);left:0;min-width:100%;width:max-content;max-width:440px;background:var(--card2);border:1px solid var(--line2);border-radius:5px;z-index:70;display:none;box-shadow:0 12px 30px rgba(0,0,0,.55);max-height:320px;overflow:auto}
+.split{display:grid;gap:var(--gap);grid-template-columns:minmax(0,1fr) 340px}
+.sugg{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;width:max-content;max-width:460px;background:var(--card2);border:1px solid var(--line2);border-radius:var(--r);z-index:70;display:none;box-shadow:0 14px 34px rgba(0,0,0,.55);max-height:340px;overflow:auto;padding:4px 0}
 .sugg.open{display:block}
 @media (max-width:1100px){.split{grid-template-columns:minmax(0,1fr)}}
 
 /* ── stock analyzer ── */
-.fa-search{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.fa-h{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
-.fa-h .nm2{font-size:1.35rem;font-weight:800}
-.fa-h .meta{color:var(--muted);font-size:.84rem;margin-top:3px}
-.fa-h .px{font-family:var(--mono);font-size:1.9rem;font-weight:800;line-height:1.1}
+.fa-search{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.fa-sticky{position:sticky;top:0;z-index:8;background:var(--bg);margin:calc(-1*var(--gap)) calc(-1*var(--gap)) var(--gap);padding:var(--gap) var(--gap) 0}
+.fa-sum{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.fa-sum .top{display:flex;gap:28px;align-items:center;padding:12px var(--pad) 10px;flex-wrap:wrap}
+.fa-sum .nm2{font-size:1.28rem;font-weight:750;line-height:1.25}
+.fa-sum .meta{color:var(--muted);font-size:.86rem;margin-top:3px}
+.fa-sum .bar{display:flex;align-items:center;gap:8px;padding:0 calc(var(--pad) - .7rem);border-top:1px solid var(--line);flex-wrap:wrap}
+.fa-sum .bar .tabs .tab{padding:.7rem .75rem calc(.7rem - 2px);font-size:.94rem}
+.fa-kv{display:flex;flex-direction:column;align-items:flex-end;gap:1px;min-width:0}
+.fa-kv .k{font-size:.74rem;color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.fa-kv .v{font-family:var(--mono);font-size:1.45rem;font-weight:800;white-space:nowrap;line-height:1.2}
+.fa-kv .s{font-family:var(--mono);font-size:.86rem;white-space:nowrap}
 .fa-big{font-family:var(--mono);font-size:2.3rem;font-weight:800;line-height:1.1}
-.verdict{display:inline-block;padding:4px 10px;border-radius:5px;font-weight:800;font-size:.9rem;letter-spacing:.02em}
-.verdict.v2{background:var(--up-bg);color:var(--up)}.verdict.v1{background:rgba(31,191,117,.08);color:#7bd8a8}.verdict.v0{background:rgba(240,169,46,.14);color:var(--amber)}.verdict.v-1{background:rgba(240,68,79,.08);color:#ff8a92}.verdict.v-2{background:var(--down-bg);color:var(--down)}
-.ff{position:relative;padding:2px 0 24px;--ffl:15rem;--ffv:9.5rem}
-.ff-r{display:grid;grid-template-columns:var(--ffl) 1fr var(--ffv);gap:10px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--line);font-size:.84rem}
+.verdict{display:inline-block;padding:4px 10px;border-radius:6px;font-weight:700;font-size:.9rem;letter-spacing:.01em}
+.verdict.sm{padding:1px 7px;font-size:.78rem}
+.verdict.v2{background:var(--up-bg);color:var(--up)}.verdict.v1{background:rgba(34,195,127,.08);color:#7fdbad}.verdict.v0{background:rgba(240,169,46,.14);color:var(--amber)}.verdict.v-1{background:rgba(242,82,92,.08);color:#ff9aa1}.verdict.v-2{background:var(--down-bg);color:var(--down)}
+.ff{position:relative;padding:2px 0 26px;--ffl:16rem;--ffv:10rem}
+.ff-r{display:grid;grid-template-columns:var(--ffl) 1fr var(--ffv);gap:12px;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--sep);font-size:.9rem}
 .ff-r .l1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ff-r .vv{text-align:right;font-family:var(--mono);white-space:nowrap}
-.ff-t{position:relative;height:18px;background:linear-gradient(90deg,transparent,rgba(40,50,65,.25),transparent)}
-.ff-b{position:absolute;top:6px;height:6px;border-radius:3px;opacity:.5}
-.ff-m{position:absolute;top:1px;width:5px;height:16px;border-radius:2px;transform:translateX(-50%)}
-.ff-ln{position:absolute;top:0;bottom:22px;width:0;pointer-events:none;border-left:2px solid #e6edf3;z-index:1}
+.ff-t{position:relative;height:20px;background:linear-gradient(90deg,transparent,rgba(44,54,70,.3),transparent);border-radius:3px}
+.ff-b{position:absolute;top:7px;height:6px;border-radius:3px;opacity:.5}
+.ff-m{position:absolute;top:1px;width:5px;height:18px;border-radius:2px;transform:translateX(-50%)}
+.ff-ln{position:absolute;top:0;bottom:24px;width:0;pointer-events:none;border-left:2px solid #e6edf3;z-index:1}
 .ff-ln.fv{border-left:2px dashed var(--accent2)}
-.ff-ln span{position:absolute;bottom:-19px;transform:translateX(-50%);font-size:.68rem;white-space:nowrap;font-family:var(--mono);background:var(--card);padding:0 3px}
-.ff-ax{position:absolute;bottom:0;height:16px;font-size:.66rem;color:var(--dim);font-family:var(--mono);transform:translateX(-50%)}
-.sbar{display:grid;grid-template-columns:7.5rem 1fr 2.6rem;gap:8px;align-items:center;font-size:.84rem;padding:3px 0}
+.ff-ln span{position:absolute;bottom:-21px;transform:translateX(-50%);font-size:.76rem;white-space:nowrap;font-family:var(--mono);background:var(--card);padding:0 4px}
+.ff-ax{position:absolute;bottom:0;height:18px;font-size:.72rem;color:var(--dim);font-family:var(--mono);transform:translateX(-50%)}
+.sbar{display:grid;grid-template-columns:7.8rem 1fr 2.8rem;gap:10px;align-items:center;font-size:.9rem;padding:4px 0}
 .sbar .tr{height:8px;background:var(--bg);border-radius:4px;overflow:hidden;border:1px solid var(--line)}
 .sbar .tr i{display:block;height:100%;border-radius:4px}
 .sbar b{font-family:var(--mono);text-align:right}
-.rt{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:4px 22px}
+.rt{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:0 28px}
+.rt .grp-h{margin-top:6px}
 .rt .mini .v.g{color:var(--up)}.rt .mini .v.b{color:var(--down)}.rt .mini .v.m{color:var(--amber)}
-.chk-l{display:flex;gap:8px;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--line);font-size:.84rem}
+.chk-l{display:flex;gap:10px;align-items:baseline;padding:.42rem 0;border-bottom:1px solid var(--sep);font-size:.9rem}
 .chk-l .ic2{width:1.2rem;text-align:center;font-weight:800}
-.chk-l .d{margin-left:auto;font-family:var(--mono);color:var(--muted);font-size:.78rem;white-space:nowrap}
-.rec-bar{display:flex;height:12px;border-radius:3px;overflow:hidden;background:var(--bg)}
+.chk-l .d{margin-left:auto;font-family:var(--mono);color:var(--muted);font-size:.82rem;white-space:nowrap}
+.rec-bar{display:flex;height:12px;border-radius:4px;overflow:hidden;background:var(--bg)}
 .rec-bar i{display:block;height:100%}
-.as-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:8px;align-items:end}
+.as-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;align-items:end}
 .as-grid .in{width:100%}
 .svgw{width:100%;display:block}
 
 /* ── portfolio / tools ── */
-.app-t{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;gap:12px;align-items:center;min-width:0}
-.app-t .ic{width:2.6rem;height:2.6rem;border-radius:10px;display:grid;place-items:center;font-weight:800;font-family:var(--mono);font-size:1.1rem;flex-shrink:0;color:#fff}
+.app-t{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:var(--pad);display:flex;gap:12px;align-items:center;min-width:0}
+.app-t .ic{width:2.7rem;height:2.7rem;border-radius:10px;display:grid;place-items:center;font-weight:800;font-family:var(--mono);font-size:1.1rem;flex-shrink:0;color:#fff}
 .app-t .nmx{font-weight:700}
-.app-t .ds{font-size:.76rem;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.res{background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
-.res .k{font-size:.68rem;color:var(--dim);text-transform:uppercase;font-weight:700}
-.res .v{font-family:var(--mono);font-size:1.05rem;font-weight:800}
+.app-t .ds{font-size:.8rem;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.res{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.res .k{font-size:.74rem;color:var(--dim);font-weight:600}
+.res .v{font-family:var(--mono);font-size:1.1rem;font-weight:800}
 
 /* ── modal, toasts, statusbar ── */
-#modal-root .ov{position:fixed;inset:0;background:rgba(3,5,8,.74);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:4vh 16px;overflow:auto}
-.modal{background:var(--card);border:1px solid var(--line2);border-radius:10px;width:min(920px,100%);box-shadow:0 30px 90px rgba(0,0,0,.7);display:flex;flex-direction:column;max-height:92vh}
-.modal.wide{width:min(1280px,100%)}
-.modal.narrow{width:min(560px,100%)}
-.modal-h{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-.modal-t{font-family:var(--mono);font-weight:800;font-size:1rem;letter-spacing:.04em}
-.modal-b{padding:14px;overflow:auto;min-height:0}
-#toasts{position:fixed;right:14px;top:calc(var(--top) + var(--tape) + 10px);z-index:120;display:flex;flex-direction:column;gap:8px;width:min(400px,calc(100vw - 28px));pointer-events:none}
-.toast{background:var(--card2);border:1px solid var(--line2);border-left:3px solid var(--accent);border-radius:6px;padding:10px 30px 10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:tin .25s;font-size:.86rem;pointer-events:auto;position:relative;line-height:1.4}
+#modal-root .ov{position:fixed;inset:0;background:rgba(3,5,8,.76);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:4vh 16px;overflow:auto}
+.modal{background:var(--card);border:1px solid var(--line2);border-radius:12px;width:min(940px,100%);box-shadow:0 30px 90px rgba(0,0,0,.7);display:flex;flex-direction:column;max-height:92vh}
+.modal.wide{width:min(1320px,100%)}
+.modal.narrow{width:min(580px,100%)}
+.modal-h{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.modal-t{font-family:var(--sans);font-weight:750;font-size:1.1rem}
+.modal-b{padding:16px;overflow:auto;min-height:0}
+#toasts{position:fixed;right:16px;top:calc(var(--top) + var(--tape) + 12px);z-index:120;display:flex;flex-direction:column;gap:8px;width:min(420px,calc(100vw - 32px));pointer-events:none}
+.toast{background:var(--card2);border:1px solid var(--line2);border-left:3px solid var(--accent);border-radius:8px;padding:11px 32px 11px 14px;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:tin .25s;font-size:.9rem;pointer-events:auto;position:relative;line-height:1.45}
 .toast.ok{border-left-color:var(--up)}.toast.err{border-left-color:var(--down)}.toast.warn{border-left-color:var(--amber)}.toast.alert{border-left-color:var(--amber);background:#1d1a12}.toast.news{border-left-color:var(--down)}
-.toast .x{position:absolute;top:6px;right:8px;cursor:pointer;color:var(--dim);background:none;border:0}
+.toast .x{position:absolute;top:7px;right:9px;cursor:pointer;color:var(--dim);background:none;border:0}
 @keyframes tin{from{transform:translateX(30px);opacity:0}}
-#statusbar{height:var(--status);display:flex;align-items:center;gap:14px;padding:0 10px;background:var(--bg2);border-top:1px solid var(--line);font-family:var(--mono);font-size:.7rem;color:var(--dim);flex-shrink:0;white-space:nowrap;overflow:hidden}
-.sbs{display:inline-flex;align-items:center;gap:4px;cursor:default}
-.sbs i{width:6px;height:6px;border-radius:50%;background:var(--dim)}
+#statusbar{height:var(--status);display:flex;align-items:center;gap:16px;padding:0 14px;background:var(--bg2);border-top:1px solid var(--line);font-family:var(--mono);font-size:.76rem;color:var(--dim);flex-shrink:0;white-space:nowrap;overflow:hidden}
+.sbs{display:inline-flex;align-items:center;gap:5px;cursor:default}
+.sbs i{width:7px;height:7px;border-radius:50%;background:var(--dim)}
 .sbs.ok i{background:var(--up)}.sbs.err i{background:var(--down)}.sbs.warn i{background:var(--amber)}
-kbd{font-family:var(--mono);font-size:.72rem;background:var(--bg);border:1px solid var(--line2);border-bottom-width:2px;border-radius:3px;padding:0 5px;color:var(--text)}
-.help-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:4px 18px}
-.help-g div{display:flex;gap:10px;font-size:.84rem;padding:3px 0;border-bottom:1px dashed var(--line)}
-.help-g b{font-family:var(--mono);color:var(--amber);min-width:7.5rem}
+kbd{font-family:var(--mono);font-size:.76rem;background:var(--bg);border:1px solid var(--line2);border-bottom-width:2px;border-radius:4px;padding:0 5px;color:var(--text)}
+.help-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:4px 20px}
+.help-g div{display:flex;gap:12px;font-size:.9rem;padding:5px 0;border-bottom:1px solid var(--sep)}
+.help-g b{font-family:var(--mono);color:var(--amber);min-width:8rem}
 
 /* ── responsive ── */
-@media (max-width:1500px){.mk-bottom{grid-template-columns:repeat(2,minmax(0,1fr))}.mk-grid{grid-template-rows:minmax(420px,62vh) auto}.mk-bottom>.card{height:290px}.news-cols{--cols:2!important;height:auto}.news-cols>.card{height:70vh}}
+@media (max-width:1500px){.mk-bottom{grid-template-columns:repeat(2,minmax(0,1fr))}.mk-grid{grid-template-rows:minmax(420px,62vh) auto}.mk-bottom>.card{height:21rem}.news-cols{--cols:2!important;height:auto}.news-cols>.card{height:72vh}}
 @media (max-width:1100px){
   .mk-grid{grid-template-columns:minmax(0,1fr);grid-template-rows:auto}
-  .mk-chart{grid-row:auto;height:62vh;min-height:380px}.mk-watch{grid-column:auto;grid-row:auto;height:640px}.mk-bottom{grid-column:auto;grid-row:auto}
+  .mk-chart{grid-row:auto;height:62vh;min-height:380px}.mk-watch{grid-column:auto;grid-row:auto;height:660px}.mk-bottom{grid-column:auto;grid-row:auto}
   .g3,.g4,.g6{grid-template-columns:repeat(2,minmax(0,1fr))}
   #sessions{display:none}
+  .fa-sum .top{gap:16px}
 }
 @media (max-width:760px){
-  :root{--nav:0px;--gap:8px}
+  :root{--nav:0px;--gap:10px;--pad:12px}
   #layout{flex-direction:column}
-  #nav{order:2;width:100%;flex-direction:row;height:3.9rem;border-right:0;border-top:1px solid var(--line);padding:0;overflow-x:auto;flex-shrink:0}
-  .nav-b{flex:1;min-width:3.6rem;border-left:0;border-top:2px solid transparent;padding:6px 2px}
+  #nav{order:2;width:100%;flex-direction:row;height:4rem;border-right:0;border-top:1px solid var(--line);padding:0;overflow-x:auto;flex-shrink:0}
+  .nav-b{flex:1;min-width:3.9rem;border-left:0;border-top:3px solid transparent;padding:7px 2px;font-size:.7rem}
   .nav-b.active{border-top-color:var(--accent)}
   .nav-b .k{display:none}
   #statusbar{display:none}
@@ -398,10 +424,11 @@ kbd{font-family:var(--mono);font-size:.72rem;background:var(--bg);border:1px sol
   .g2,.g3,.g4,.g6,.mk-bottom{grid-template-columns:minmax(0,1fr)}
   .news-cols{--cols:1!important}
   .tb .hide-m{display:none}
-  .ff{--ffl:7.5rem;--ffv:4.6rem}
+  .ff{--ffl:7.5rem;--ffv:4.8rem}
   .ff-r .vv span{display:none}
   .ff-r .l1 .badge{display:none}
-  .modal-b{padding:10px}
+  .fa-sticky{position:static}
+  .fa-kv{align-items:flex-start}
 }
 </style>
 </head>
@@ -420,6 +447,7 @@ kbd{font-family:var(--mono);font-size:.72rem;background:var(--bg);border:1px sol
   <div id="sessions"></div>
   <div class="tb">
     <span id="conn" title="Stav serveru"></span>
+    <button class="ib" id="btn-size" title="Velikost písma a zobrazení"><span class="aa">Aa</span></button>
     <button class="ib hide-m" id="btn-help" title="Nápověda (?)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 015 .5c0 1.7-2.5 2-2.5 3.5M12 17h.01"/></svg></button>
     <button class="ib hide-m" id="btn-lite" title="Lite mode – úspora výkonu (L)"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></button>
     <button class="ib hide-m" id="btn-full" title="Celá obrazovka (F)"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
@@ -615,21 +643,23 @@ const fmtPrice = (y, p) => F.p(p, decFor(y, p));
 /* ───────── persistent state ───────── */
 const DEF = {
   settings: {
-    baseCurrency: 'CZK', locale: 'cs-CZ', timezone: 'Europe/Prague', quoteInterval: 15, newsInterval: 120, lite: false, tapeSpeed: 45,
+    baseCurrency: 'CZK', locale: 'cs-CZ', timezone: 'Europe/Prague', uiScale: 1, quoteInterval: 15, newsInterval: 120, lite: false, tapeSpeed: 45,
     sound: true, newsSound: false, desktopNotify: false, breakingToast: true, tvLocale: 'en', umbrelHost: '', mempoolUrl: '', rotate: 0,
     rotatePages: ['market', 'news', 'calendar', 'analytics', 'crypto'],
     tape: ['BTC', 'ETH', 'SPX', 'NDX', 'DJI', 'DAX', 'VIX', 'GOLD', 'SILVER', 'WTI', 'BRENT', 'NATGAS', 'EURUSD', 'EURCZK', 'USDCZK', 'US10Y', 'US02Y', 'DXY', 'CEZ', 'NVDA'],
     news: { disabled: [], custom: [] },
     notify: { ntfyUrl: '', ntfyToken: '', telegramToken: '', telegramChat: '', webhookUrl: '', breaking: false, breakingMin: 7 },
+    ghostfolio: { url: '', token: '', autoSync: true },
+    bitcoin: { rpcUrl: '', rpcUser: '', rpcPass: '' },
   },
   layout: {
     chart: { tv: 'FOREXCOM:SPXUSD', y: '^GSPC', l: 'SPX' }, chartMode: '1', chartInterval: 'D',
     multi: ['FOREXCOM:SPXUSD', 'BINANCE:BTCUSDT', 'OANDA:XAUUSD', 'FX_IDC:EURCZK'], wlTab: 'stocks',
     cal: { imp: ['High', 'Medium'], cur: ['USD', 'EUR', 'CZK', 'GBP', 'JPY', 'CNY'], q: '', hideDone: false, days: 30, tab: 'up' },
     news: { view: 'topics', region: 'all', imp: false, lastVisit: 0 },
-    anTab: 'stocks', corr: 'SPX,NDX,DAX,GOLD,WTI,BTC,ETH,EURUSD,DXY,US10Y,VIX,CEZ', pfTab: 'positions',
+    anTab: 'stocks', corr: 'SPX,NDX,DAX,GOLD,WTI,BTC,ETH,EURUSD,DXY,US10Y,VIX,CEZ', pfTab: 'overview',
   },
-  portfolio: { positions: [], history: [] },
+  portfolio: { activities: [], positions: [], history: [], bench: '^GSPC' },
   watchlist: { items: [{ symbol: 'AAPL' }, { symbol: 'MSFT' }, { symbol: 'NVDA' }, { symbol: 'CEZ.PR' }, { symbol: 'BTC-USD' }, { symbol: 'GC=F' }, { symbol: 'EURCZK=X' }] },
   alerts: { items: [], history: [] },
   journal: { entries: [] },
@@ -1295,7 +1325,8 @@ const CMDS = [
   { k: ['EQS', 'SCR'], d: 'Screener (TradingView)', go: ['analytics', 'screener'] },
   { k: ['CRYPTO', 'KRY', 'CC'], d: 'Krypto & on-chain', go: ['crypto'] },
   { k: ['MEMP', 'MEMPOOL', 'ONCHAIN'], d: 'Bitcoin síť (mempool, poplatky)', go: ['crypto'] },
-  { k: ['PORT', 'PRT', 'PF'], d: 'Portfolio', go: ['portfolio', 'positions'] },
+  { k: ['PORT', 'PRT', 'PF'], d: 'Portfolio – přehled, výkonnost, alokace', go: ['portfolio', 'overview'] },
+  { k: ['TX', 'TRAN'], d: 'Transakce a propojení s Ghostfoliem', go: ['portfolio', 'tx'] },
   { k: ['WL', 'WATCH'], d: 'Můj watchlist', go: ['portfolio', 'watch'] },
   { k: ['ALRT', 'ALERT'], d: 'Cenové alerty', go: ['portfolio', 'alerts'] },
   { k: ['NOTE', 'JRNL', 'DENIK'], d: 'Obchodní deník', go: ['portfolio', 'journal'] },
@@ -1381,7 +1412,7 @@ const Cmd = {
     if (fn === 'N') { go('news', 'live'); setTimeout(() => Pages.news.search(sym.n !== sym.k ? sym.n : sym.l), 50); return; }
     if (fn === 'ALRT') { go('portfolio', 'alerts'); setTimeout(() => Pages.portfolio.prefillAlert(sym.y), 80); return; }
     if (fn === 'WL') { addToWatchlist(sym.y); return; }
-    if (fn === 'PORT') { go('portfolio', 'positions'); setTimeout(() => Pages.portfolio.editPosition(null, sym.y), 80); return; }
+    if (fn === 'PORT') { go('portfolio', 'tx'); setTimeout(() => Pages.portfolio.txModal(null, sym.y), 150); return; }
     if (fn === 'TV') { window.open('https://www.tradingview.com/symbols/' + encodeURIComponent(sym.tv.replace(':', '-')) + '/', '_blank', 'noopener'); return; }
     if ((fn === 'FA' || fn === 'EQRV' || fn === 'VAL') && sym.y) return go('stock', sym.y);
     // a plain stock symbol opens the stock analyzer, anything else the chart
@@ -1499,7 +1530,7 @@ const TAGC = { 'VÁLKA': 'r', SANKCE: 'r', BREAKING: 'r', HACK: 'r', KRACH: 'r',
 function newsItem(i, { summary = false, since = 0 } = {}) {
   const cls = i.score >= 6 ? 'hi' : i.score >= 3 ? 'md' : '';
   const tr = i.region !== 'cz' && i.link ? `<a class="trl" href="https://translate.google.com/translate?sl=auto&tl=cs&u=${encodeURIComponent(i.link)}" target="_blank" rel="noopener" title="Přeložit do češtiny">CZ⇄</a>` : '';
-  return `<div class="ni ${cls} ${since && i.ts > since ? 'new' : ''}"><div class="meta"><span class="tm2" title="${esc(F.dt(i.ts))}">${F.time(i.ts)}</span><span>${F.ago(i.ts)}</span><span class="rg ${esc(i.region)}">${REG[i.region] || ''}</span><span class="src">${esc(i.source)}</span>${i.also ? `<span title="Také: ${esc(i.also.join(', '))}">+${i.also.length}</span>` : ''}${(i.tags || []).map(t => `<span class="tag ${TAGC[t] || ''}" data-tag="${esc(t)}">${esc(t)}</span>`).join('')}${tr}</div><a class="tt" href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a>${summary && i.summary ? `<div class="sm">${esc(i.summary)}</div>` : ''}</div>`;
+  return `<div class="ni ${cls} ${since && i.ts > since ? 'new' : ''}"><div class="meta"><span class="tm2" title="${esc(F.dt(i.ts) + ' · před ' + F.ago(i.ts))}">${Date.now() - i.ts < 864e5 ? F.time(i.ts) : esc(F.dshort(i.ts))}</span><span class="rg ${esc(i.region)}">${REG[i.region] || ''}</span><span class="src">${esc(i.source)}</span>${i.also ? `<span title="Také: ${esc(i.also.join(', '))}">+${i.also.length}</span>` : ''}${(i.tags || []).slice(0, 3).map(t => `<span class="tag ${TAGC[t] || ''}" data-tag="${esc(t)}">${esc(t)}</span>`).join('')}${tr}</div><a class="tt" href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a>${summary && i.summary ? `<div class="sm">${esc(i.summary)}</div>` : ''}</div>`;
 }
 
 /* ═════════════════════════ PAGE: MARKET ═════════════════════════ */
@@ -1588,7 +1619,7 @@ Pages.market = {
   renderWL(tab) {
     L().wlTab = tab; saveLayout();
     const keys = this.WL[tab].k;
-    const row = k => { const i = I[k]; return `<tr class="click" data-k="${k}"><td><span class="sym">${esc(i.l)}</span>${i.bn ? ' <span class="badge live" title="Real-time přes Binance WebSocket">LIVE</span>' : ''}<span class="nm">${esc(i.n)}</span></td><td>${qc(i.y)}${i.yld ? '<span class="dim"> %</span>' : ''}</td><td>${qc(i.y, 'pct')}<div class="dim" style="font-size:.74rem">${qc(i.y, 'chg')}</div></td><td data-sp="${esc(i.y)}"></td><td><button class="btn sm ghost des" title="Detail">i</button></td></tr>`; };
+    const row = k => { const i = I[k]; return `<tr class="click" data-k="${k}"><td>${i.bn ? '<span class="lv" title="Real-time přes Binance WebSocket"></span>' : ''}<span class="sym">${esc(i.l)}</span><span class="nm">${esc(i.n)}</span></td><td>${qc(i.y)}${i.yld ? '<span class="dim"> %</span>' : ''}</td><td>${qc(i.y, 'pct', 'pill')}</td><td data-sp="${esc(i.y)}"></td><td><button class="btn sm ghost des" title="Detail instrumentu">i</button></td></tr>`; };
     let body;
     if (tab === 'rates') {
       body = `<tr class="sec"><td colspan="5">Měnová politika</td></tr><tbody id="mk-cb"><tr><td colspan="5" class="loading">Načítám sazby</td></tr></tbody>
@@ -1665,7 +1696,7 @@ Pages.market = {
     const ys = [...new Set(['stocks', 'commod', 'crypto'].flatMap(t => this.WL[t].k.map(k => I[k].y)))].filter(y => Q.d[y] && isNum(Q.d[y].changePct) && y !== '^VIX');
     if (ys.length < 4) return;
     const s = ys.sort((a, b) => Q.d[b].changePct - Q.d[a].changePct);
-    const row = y => { const i = byY[y]; return `<tr class="click" data-y="${esc(y)}"><td><span class="sym">${esc(i ? i.l : y)}</span></td><td>${fmtPrice(y, Q.d[y].price)}</td><td class="${F.cls(Q.d[y].changePct)}">${F.pct(Q.d[y].changePct)}</td></tr>`; };
+    const row = y => { const i = byY[y]; return `<tr class="click" data-y="${esc(y)}"><td><span class="sym">${esc(i ? i.l : y)}</span></td><td>${fmtPrice(y, Q.d[y].price)}</td><td><span class="pill ${F.cls(Q.d[y].changePct)}">${F.pct(Q.d[y].changePct)}</span></td></tr>`; };
     $('#mk-movers').innerHTML = `<table class="t compact"><tr class="sec"><td colspan="3">▲ Nejvíce rostou</td></tr>${s.slice(0, 5).map(row).join('')}<tr class="sec"><td colspan="3">▼ Nejvíce klesají</td></tr>${s.slice(-5).reverse().map(row).join('')}</table>`;
   },
   renderSess() {
@@ -2136,8 +2167,9 @@ Pages.crypto = {
   init() {
     $('#page-crypto').innerHTML = `
       <div class="grid g6 mb" id="cr-kpi">${['Celková kapitalizace', 'Objem 24h (top 100)', 'BTC dominance', 'ETH dominance', 'Stablecoiny', 'Fear & Greed'].map((k, i) => `<div class="kpi"><div class="k">${k}</div><div class="v" id="cr-k${i}">—</div><div class="s" id="cr-s${i}">&nbsp;</div></div>`).join('')}</div>
-      <div class="grid auto mb" style="--min:165px">${this.LIVE.map(k => { const i = I[k]; return `<div class="ctile" data-k="${k}"><div class="h"><span><span class="sym">${i.l}</span> <span class="dim" style="font-size:.75rem">${esc(i.n)}</span></span>${qc(i.y, 'pct')}</div><div class="p">${qc(i.y)}</div><div class="s">H ${qc(i.y, 'high')} · L ${qc(i.y, 'low')}</div><div class="s">objem 24h $${qc(i.y, 'qvol')}</div></div>`; }).join('')}</div>
-      <div class="grid g3 mb">
+      <div class="grid auto mb" style="--min:165px">${this.LIVE.map(k => { const i = I[k]; return `<div class="ctile" data-k="${k}"><div class="h"><span><span class="sym">${i.l}</span> <span class="dim" style="font-size:.8rem">${esc(i.n)}</span></span>${qc(i.y, 'pct', 'pill')}</div><div class="p">${qc(i.y)}</div><div class="s">H ${qc(i.y, 'high')} · L ${qc(i.y, 'low')}</div><div class="s">objem 24h $${qc(i.y, 'qvol')}</div></div>`; }).join('')}</div>
+      <div class="grid auto mb" style="--min:340px">
+        <div class="card"><div class="card-h"><span class="card-t">Můj Bitcoin uzel</span><span class="sp"></span><span id="cr-node-st"></span></div><div class="card-b" id="cr-node"><div class="loading">Zjišťuji uzel</div></div></div>
         <div class="card"><div class="card-h"><span class="card-t">Bitcoin síť</span><span class="sp"></span><span class="card-s" id="cr-mp-src"></span></div><div class="card-b" id="cr-net"><div class="loading">Načítám mempool</div></div></div>
         <div class="card"><div class="card-h"><span class="card-t">Poslední bloky</span></div><div class="card-b np" id="cr-blocks"></div></div>
         <div class="card"><div class="card-h"><span class="card-t">Sentiment · Fear & Greed 60 d</span></div><div class="card-b" id="cr-sent"></div></div>
@@ -2153,13 +2185,13 @@ Pages.crypto = {
       const th = e.target.closest('th[data-k]'); if (th) { const k = th.dataset.k; this.sort = { k, d: this.sort.k === k ? -this.sort.d : (k === 'rank' || k === 'name' ? 1 : -1) }; return this.renderTable(); }
       const tr = e.target.closest('tr[data-s]'); if (tr) showChart(resolveSym(tr.dataset.s + '-USD'));
     });
-    Timers.add('cr-mp', 30e3, () => this.loadMempool(), () => App.page === 'crypto');
+    Timers.add('cr-mp', 30e3, () => { this.loadMempool(); this.loadNode(); }, () => App.page === 'crypto');
     Timers.add('cr-mk', 120e3, () => { Data.drop('cgm'); return this.loadMarkets(); }, () => App.page === 'crypto');
     Timers.add('cr-g', 90e3, () => this.loadGlobal(), () => App.page === 'crypto');
   },
   show() {
     Q.sub('crypto', this.LIVE.map(k => I[k].y).concat(['CZK=X']));
-    this.loadMempool(); this.loadMarkets(); this.loadGlobal();
+    this.loadMempool(); this.loadNode(); this.loadMarkets(); this.loadGlobal();
   },
   hide() { Q.unsub('crypto'); },
   async loadGlobal() {
@@ -2197,10 +2229,36 @@ Pages.crypto = {
     const pc = v => `<td class="${F.cls(v)}">${F.pct(v)}</td>`;
     $('#cr-table').innerHTML = `<table class="t"><thead><tr>${th('rank', '#')}${th('name', 'Kryptoměna', 'l')}${th('price', 'Cena')}${th('ch1h', '1h')}${th('ch24h', '24h')}${th('ch7d', '7d')}${th('mcap', 'Kapitalizace')}${th('vol', 'Objem 24h')}<th>7 dní</th></tr></thead><tbody>${list.map(c => `<tr class="click" data-s="${esc(c.symbol)}"><td class="dim">${c.rank ?? ''}</td><td class="l"><img class="coin-i" src="${esc(c.image)}" alt="" loading="lazy"><span class="sym">${esc(c.symbol)}</span> <span class="dim" style="font-family:var(--sans);font-size:.78rem">${esc(c.name)}</span></td><td>$${F.p(c.price)}</td>${pc(c.ch1h)}${pc(c.ch24h)}${pc(c.ch7d)}<td>$${F.big(c.mcap)}</td><td>$${F.big(c.vol)}</td><td>${spark(c.spark, { w: 96, h: 24 })}</td></tr>`).join('')}</tbody></table>`;
   },
+  async loadNode() {
+    const el = $('#cr-node'), st = $('#cr-node-st');
+    if (!el) return;
+    let n;
+    try { n = await API.get('api/node', 20000); } catch (e) { el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+    if (!n.configured) {
+      st.innerHTML = '<span class="badge">nepřipojen</span>';
+      el.innerHTML = `<p class="note">Připojte svůj Bitcoin uzel – FinTerm pak ukáže stav synchronizace, peery, mempool a odhady poplatků přímo z vašeho uzlu.</p><p class="note" style="margin-top:8px">Na Umbrelu se uzel připojí automaticky (aplikace Bitcoin Node). Jinak vyplňte RPC údaje v <a href="#" data-open-set="conn">Nastavení → Propojení</a>.</p>`;
+      return;
+    }
+    if (n.error) { st.innerHTML = '<span class="badge err">chyba</span>'; el.innerHTML = `<div class="empty">Uzel neodpovídá: ${esc(n.error)}</div>`; return; }
+    const synced = n.progress > 0.9999 && !n.ibd, f = n.fees || {};
+    st.innerHTML = synced ? '<span class="badge live">synchronizováno</span>' : `<span class="badge warn">synchronizace ${F.n(n.progress * 100, 2)} %</span>`;
+    const up = n.uptime ? (n.uptime > 86400 ? `${Math.floor(n.uptime / 86400)} d ${Math.floor(n.uptime % 86400 / 3600)} h` : `${Math.floor(n.uptime / 3600)} h ${Math.floor(n.uptime % 3600 / 60)} m`) : '—';
+    const r = (k, v) => `<div class="mini"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+    el.innerHTML = `<div class="row mb" style="gap:6px;flex-wrap:nowrap">${[['~10 min', f.fast], ['~30 min', f.m30], ['~1 h', f.h1], ['~1 den', f.day]].map(([k, v]) => `<div class="fee"><div class="v">${v ?? '—'}</div><div class="k">${k}</div></div>`).join('')}</div>
+      <div class="note mb" style="text-align:center">odhad poplatků z vašeho uzlu (sat/vB)</div>
+      ${synced ? '' : `<div class="prog mb"><i style="width:${(n.progress * 100).toFixed(2)}%"></i></div>`}
+      ${r('Výška bloku', F.n(n.blocks, 0) + (n.headers > n.blocks ? ' / ' + F.n(n.headers, 0) : ''))}
+      ${r('Poslední blok', n.time ? 'před ' + F.ago(n.time) : '—')}
+      ${r('Peery', `${n.connections ?? '—'}${n.inbound != null ? ` (in ${n.inbound} · out ${n.outbound})` : ''}`)}
+      ${r('Sítě', esc((n.networks || []).join(', ') || '—'))}
+      ${r('Mempool', n.mempool ? `${F.n(n.mempool.size, 0)} tx · ${F.n(n.mempool.bytes / 1e6, 1)} vMB · min ${F.n(n.mempool.minfee, 2)} sat/vB` : '—')}
+      ${r('Blockchain na disku', n.size ? F.n(n.size / 1e9, 0) + ' GB' + (n.pruned ? ' (pruned)' : '') : '—')}
+      ${r('Verze · uptime', `${esc(String(n.version || '').replace(/^\/|\/$/g, ''))} · ${up}`)}`;
+  },
   async loadMempool() {
     let m;
     try { m = await API.get('api/mempool', 20000); } catch (e) { $('#cr-net').innerHTML = `<div class="empty">Mempool API nedostupné: ${esc(e.message)}</div>`; return; }
-    $('#cr-mp-src').textContent = m.base.replace(/^https?:\/\//, '');
+    $('#cr-mp-src').innerHTML = m.local ? `<span class="badge live" title="${esc(m.base)}">vlastní mempool</span>` : esc(m.base.replace(/^https?:\/\//, ''));
     const f = m.fees || {}, dfc = m.difficulty || {}, h = m.height || 0;
     const nextHalv = Math.ceil((h + 1) / 210000) * 210000, left = nextHalv - h, avg = dfc.timeAvg || 600000;
     const btc = Q.d['BTC-USD'] && Q.d['BTC-USD'].price, usdczk = Q.d['CZK=X'] && Q.d['CZK=X'].price;
@@ -2291,18 +2349,49 @@ function fxConv(v, from, to, fx) {
   return a && b ? v * a / b : null;
 }
 
+const TX_L = { BUY: ['Nákup', 'live'], SELL: ['Prodej', 'err'], DIVIDEND: ['Dividenda', 'blue'], INTEREST: ['Úrok', 'blue'], FEE: ['Poplatek', 'warn'], ITEM: ['Majetek', ''], LIABILITY: ['Závazek', 'err'] };
+const pfLabel = h => String(h.symbol || '').replace(/^CASH:/, 'Hotovost ').replace(/^MANUAL:/, '');
 Pages.portfolio = {
   title: 'Portfolio',
+  BENCH: [['^GSPC', 'S&P 500'], ['URTH', 'MSCI World'], ['^NDX', 'Nasdaq 100'], ['^GDAXI', 'DAX'], ['BTC-USD', 'Bitcoin']],
+  ALLOC: [['holding', 'Pozice'], ['cls', 'Třída'], ['sector', 'Sektor'], ['country', 'Země'], ['currency', 'Měna'], ['account', 'Účet']],
   init() {
+    this.migrate();
+    this.base = S().baseCurrency || 'CZK';
+    this.bench = Store.d.portfolio.bench || '^GSPC';
+    this.mode = 'value'; this.range = 'MAX'; this.allocKey = 'holding'; this.fa = {};
     $('#page-portfolio').innerHTML = `
-      <div class="subnav"><div class="tabs" data-g="pf"><button class="tab" data-t="positions">Portfolio</button><button class="tab" data-t="watch">Watchlist</button><button class="tab" data-t="alerts">Alerty</button><button class="tab" data-t="journal">Obchodní deník</button><button class="tab" data-t="apps">Umbrel aplikace</button></div><span class="sp"></span><span class="card-s" id="pf-sync"></span></div>
-      <div data-g="pf" data-p="positions">
+      <div class="subnav"><div class="tabs" data-g="pf"><button class="tab" data-t="overview">Přehled</button><button class="tab" data-t="holdings">Pozice</button><button class="tab" data-t="tx">Transakce & zdroje</button><button class="tab" data-t="watch">Watchlist</button><button class="tab" data-t="alerts">Alerty</button><button class="tab" data-t="journal">Obchodní deník</button><button class="tab" data-t="apps">Umbrel aplikace</button></div>
+        <span class="sp"></span>
+        <div class="row pf-ctl" style="gap:8px"><span class="card-s" id="pf-src"></span><div class="seg" id="pf-base">${['CZK', 'USD', 'EUR'].map(c => `<button data-v="${c}" class="${c === this.base ? 'active' : ''}">${c}</button>`).join('')}</div>
+          <select class="in" id="pf-bench" style="height:2.05rem;width:auto" title="Srovnávací index">${this.BENCH.map(([v, l]) => `<option value="${v}">vs ${l}</option>`).join('')}</select>
+          <button class="btn sm" id="pf-sync" title="Načíst znovu / synchronizovat s Ghostfoliem">⟳</button></div></div>
+      <div data-g="pf" data-p="overview"><div id="pf-ov">
         <div class="grid g6 mb" id="pf-kpi"></div>
-        <div class="split mb"><div class="card"><div class="card-h"><span class="card-t">Pozice</span><span class="sp"></span><button class="btn sm pri" id="pf-add">+ Přidat pozici</button><button class="btn sm" id="pf-exp">Export CSV</button><label class="btn sm">Import CSV<input type="file" id="pf-imp" accept=".csv,text/csv" hidden></label></div><div class="card-b np" id="pf-table"></div></div>
-          <div class="col"><div class="card"><div class="card-h"><span class="card-t">Alokace dle tříd</span></div><div class="card-b" id="pf-alloc1"></div></div><div class="card"><div class="card-h"><span class="card-t">Alokace dle pozic</span></div><div class="card-b" id="pf-alloc2"></div></div></div></div>
-        <div class="card" style="height:300px"><div class="card-h"><span class="card-t">Vývoj hodnoty portfolia</span><span class="sp"></span><span class="card-s">denní snímek při otevření stránky</span></div><div class="card-b"><div id="pf-hist" style="height:100%"></div></div></div>
-      </div>
-      <div data-g="pf" data-p="watch"><div class="card"><div class="card-h"><span class="card-t">Můj watchlist</span><span class="sp"></span><div><input class="in" id="wl-in" placeholder="Přidat symbol (AAPL, CEZ.PR, BTC-USD…)" style="width:18rem;height:1.95rem"></div><button class="btn sm pri" id="wl-add">Přidat</button></div><div class="card-b np" id="wl-table"></div></div></div>
+        <div class="card mb"><div class="card-h"><span class="card-t">Vývoj portfolia</span><div class="seg" id="pf-mode"><button data-v="value" class="active">Hodnota</button><button data-v="perf">Výkonnost %</button></div><span class="sp"></span><div class="seg" id="pf-range">${['1M', '3M', '6M', 'YTD', '1R', 'MAX'].map(r => `<button data-v="${r}" class="${r === 'MAX' ? 'active' : ''}">${r}</button>`).join('')}</div></div>
+          <div class="card-b"><div id="pf-chart" style="height:330px"></div><div class="note" id="pf-chart-note" style="margin-top:8px"></div></div></div>
+        <div class="grid g2 mb"><div class="card"><div class="card-h"><span class="card-t">Alokace</span><span class="sp"></span><div class="tabs" id="pf-alloc-t">${this.ALLOC.map(([k, l], i) => `<button class="tab ${i ? '' : 'active'}" data-k="${k}">${l}</button>`).join('')}</div></div><div class="card-b" id="pf-alloc"></div></div>
+          <div class="card"><div class="card-h"><span class="card-t">X-ray · kontrola rizik</span><span class="sp"></span><span id="pf-xs"></span></div><div class="card-b" id="pf-xray"></div></div></div>
+        <div class="grid g3 mb"><div class="card"><div class="card-h"><span class="card-t">Nejlepší a nejhorší pozice</span></div><div class="card-b np" id="pf-best"></div></div>
+          <div class="card"><div class="card-h"><span class="card-t">Riziko a srovnání</span></div><div class="card-b" id="pf-risk"></div></div>
+          <div class="card"><div class="card-h"><span class="card-t">Dividendy</span></div><div class="card-b" id="pf-div"></div></div></div></div></div>
+      <div data-g="pf" data-p="holdings">
+        <div class="card mb"><div class="card-h"><span class="card-t">Pozice</span><span class="card-s" id="pf-hcount"></span><span class="sp"></span><span class="card-s" id="pf-fa-st"></span><button class="btn sm" id="pf-eval" title="Spočítá férovou cenu a skóre pro každou akcii v portfoliu">Ohodnotit akcie</button><button class="btn sm pri" data-pf="add">+ Transakce</button></div><div class="card-b np" id="pf-hold"></div></div>
+        <div class="card" id="pf-closed-c" hidden><div class="card-h"><span class="card-t">Uzavřené pozice</span></div><div class="card-b np" id="pf-closed"></div></div></div>
+      <div data-g="pf" data-p="tx">
+        <div class="grid g2 mb"><div class="card"><div class="card-h"><span class="card-t">Propojení s Ghostfoliem</span><span class="sp"></span><span id="gf-st"></span></div><div class="card-b">
+            <div class="form" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr))">
+              <label class="f">Adresa Ghostfolia<input class="in" id="gf-url" placeholder="http://umbrel.local:3334"></label>
+              <label class="f">Security Token<input class="in" id="gf-token" type="password" autocomplete="off" placeholder="Ghostfolio → účet → Security Token"></label></div>
+            <div class="row" style="margin-top:12px"><label class="chk"><input type="checkbox" id="gf-auto" checked> synchronizovat automaticky každých 30 min</label><span class="sp"></span><button class="btn" id="gf-clear">Odpojit</button><button class="btn pri" id="gf-save">Uložit a synchronizovat</button></div>
+            <div class="note" id="gf-msg" style="margin-top:10px"></div>
+            <p class="note" style="margin-top:10px">FinTerm si přes Ghostfolio API stáhne transakce a účty a spočítá z nich analýzu. Token získáte v Ghostfoliu: <b>My Ghostfolio → Settings → Security Token</b> (u účtu s přihlášením tokenem, případně vygenerujte nový). Na Umbrelu zkusí FinTerm automaticky i interní adresu Ghostfolia, takže projde i přes přihlášení Umbrelu.</p></div></div>
+          <div class="card"><div class="card-h"><span class="card-t">Import ze souboru</span></div><div class="card-b">
+            <p class="note mb">Ghostfolio: <b>My Ghostfolio → Account → Export Data</b> (JSON). Import nahradí dříve importovaná nebo synchronizovaná data; ručně zadané transakce zůstanou.</p>
+            <div class="row"><label class="btn pri">Vybrat Ghostfolio export (.json)<input type="file" id="gf-file" accept="application/json,.json" hidden></label><button class="btn" id="tx-exp">Export transakcí (CSV)</button></div>
+            <div class="note" id="gf-file-st" style="margin-top:10px"></div></div></div></div>
+        <div class="card mb"><div class="card-h"><span class="card-t">Transakce</span><span class="card-s" id="tx-count"></span><span class="sp"></span><input class="in" id="tx-q" placeholder="Filtrovat…" style="width:12rem;height:2.05rem"><button class="btn sm pri" data-pf="add">+ Přidat transakci</button></div><div class="card-b np" id="tx-table"></div></div></div>
+      <div data-g="pf" data-p="watch"><div class="card"><div class="card-h"><span class="card-t">Můj watchlist</span><span class="sp"></span><div><input class="in" id="wl-in" placeholder="Přidat symbol (AAPL, CEZ.PR, BTC-USD…)" style="width:18rem;height:2.05rem"></div><button class="btn sm pri" id="wl-add">Přidat</button></div><div class="card-b np" id="wl-table"></div></div></div>
       <div data-g="pf" data-p="alerts">
         <div class="card mb"><div class="card-h"><span class="card-t">Nový alert</span><span class="sp"></span><span class="card-s">vyhodnocuje server každou minutu 24/7 · push přes ntfy / Telegram / webhook (Nastavení)</span></div>
           <div class="card-b"><div class="form">
@@ -2311,11 +2400,10 @@ Pages.portfolio = {
             <label class="f">Hodnota<input class="in" id="al-val" inputmode="decimal"></label>
             <label class="f">Poznámka<input class="in" id="al-note" placeholder="volitelné"></label>
             <label class="f">Opakování<select class="in" id="al-rep"><option value="0">jednorázově</option><option value="60">opakovat (1×/h)</option><option value="240">opakovat (1×/4h)</option><option value="1440">opakovat (1×/den)</option></select></label>
-            <button class="btn pri" id="al-add" style="height:2.15rem">Vytvořit alert</button>
+            <button class="btn pri" id="al-add" style="height:2.3rem">Vytvořit alert</button>
           </div><div class="note" id="al-cur" style="margin-top:6px"></div></div></div>
         <div class="card mb"><div class="card-h"><span class="card-t">Aktivní a spuštěné alerty</span><span class="sp"></span><button class="btn sm" id="al-test">Test notifikace</button></div><div class="card-b np" id="al-table"></div></div>
-        <div class="card"><div class="card-h"><span class="card-t">Historie spuštění</span></div><div class="card-b np" id="al-hist"></div></div>
-      </div>
+        <div class="card"><div class="card-h"><span class="card-t">Historie spuštění</span></div><div class="card-b np" id="al-hist"></div></div></div>
       <div data-g="pf" data-p="journal">
         <div class="grid g6 mb" id="jr-kpi"></div>
         <div class="card mb"><div class="card-h"><span class="card-t" id="jr-ft">Nový záznam</span><span class="sp"></span><button class="btn sm" id="jr-exp">Export CSV</button></div><div class="card-b"><div class="form" id="jr-form">
@@ -2329,24 +2417,41 @@ Pages.portfolio = {
           <label class="f">Měna<select class="in" data-j="currency">${['CZK', 'USD', 'EUR', 'GBP'].map(c => `<option>${c}</option>`).join('')}</select></label>
           <label class="f">Setup / strategie<input class="in" data-j="setup" placeholder="breakout, swing…"></label>
           <label class="f">Hodnocení<select class="in" data-j="rating"><option value="">—</option>${[1, 2, 3, 4, 5].map(i => `<option value="${i}">${'★'.repeat(i)}</option>`).join('')}</select></label>
-        </div><label class="f" style="margin-top:8px">Poznámky, teze, ponaučení<textarea class="in" data-j="notes" rows="3"></textarea></label>
-        <div class="row" style="margin-top:8px"><button class="btn pri" id="jr-save">Uložit záznam</button><button class="btn" id="jr-cancel" hidden>Zrušit úpravu</button><span class="sp"></span><input class="in" id="jr-q" placeholder="Filtrovat…" style="width:12rem"></div></div></div>
-        <div class="card"><div class="card-h"><span class="card-t">Záznamy</span></div><div class="card-b np" id="jr-table"></div></div>
-      </div>
-      <div data-g="pf" data-p="apps"><div class="subnav"><span class="card-s" id="ap-host"></span><span class="sp"></span><button class="btn sm" id="ap-check">⟳ Zkontrolovat stav</button><button class="btn sm" id="ap-edit">Upravit seznam</button></div><div class="grid auto" style="--min:260px" id="ap-grid"></div>
-        <p class="note" style="margin-top:10px">Porty odpovídají výchozím portům aplikací v Umbrel App Store – pokud se liší, upravte je. Stav se zjišťuje přímo z prohlížeče (dostupnost portu). Hostitel lze změnit v Nastavení.</p></div>`;
+        </div><label class="f" style="margin-top:10px">Poznámky, teze, ponaučení<textarea class="in" data-j="notes" rows="3"></textarea></label>
+        <div class="row" style="margin-top:10px"><button class="btn pri" id="jr-save">Uložit záznam</button><button class="btn" id="jr-cancel" hidden>Zrušit úpravu</button><span class="sp"></span><input class="in" id="jr-q" placeholder="Filtrovat…" style="width:12rem"></div></div></div>
+        <div class="card"><div class="card-h"><span class="card-t">Záznamy</span></div><div class="card-b np" id="jr-table"></div></div></div>
+      <div data-g="pf" data-p="apps"><div class="subnav"><span class="card-s" id="ap-host"></span><span class="sp"></span><button class="btn sm" id="ap-check">⟳ Zkontrolovat stav</button><button class="btn sm" id="ap-edit">Upravit seznam</button></div><div class="grid auto" style="--min:270px" id="ap-grid"></div>
+        <p class="note" style="margin-top:12px">Porty odpovídají výchozím portům aplikací v Umbrel App Store – pokud se liší, upravte je. Stav se zjišťuje přímo z prohlížeče (dostupnost portu). Hostitel lze změnit v Nastavení.</p></div>`;
     this.tabs = tabs($('[data-g="pf"].tabs'), t => this.onTab(t), false);
-    // positions
-    $('#pf-add').onclick = () => this.editPosition(null);
-    $('#pf-exp').onclick = () => this.exportCSV();
-    $('#pf-imp').onchange = e => this.importCSV(e.target.files[0]);
-    $('#pf-table').addEventListener('click', e => {
-      const b = e.target.closest('[data-act]'); const tr = e.target.closest('tr[data-id]');
-      if (!tr) return;
-      if (b && b.dataset.act === 'edit') return this.editPosition(tr.dataset.id);
-      if (b && b.dataset.act === 'del') return this.delPosition(tr.dataset.id);
-      const p = Store.d.portfolio.positions.find(x => x.id === tr.dataset.id);
-      if (p && p.symbol !== 'CASH') openDES(resolveSym(p.symbol));
+    // portfolio controls
+    seg($('#pf-base'), v => { this.base = v; this.load(); });
+    $('#pf-bench').value = this.bench;
+    $('#pf-bench').onchange = e => { this.bench = e.target.value; Store.d.portfolio.bench = this.bench; Store.set('portfolio'); this.load(true); };
+    $('#pf-sync').onclick = () => this.refresh();
+    seg($('#pf-mode'), v => { this.mode = v; this.renderChart(); });
+    seg($('#pf-range'), v => { this.range = v; this.renderChart(); });
+    $('#pf-alloc-t').addEventListener('click', e => { const b = e.target.closest('.tab'); if (!b) return; $$('#pf-alloc-t .tab').forEach(x => x.classList.toggle('active', x === b)); this.allocKey = b.dataset.k; this.renderAlloc(); });
+    $('#page-portfolio').addEventListener('click', e => { const a = e.target.closest('[data-pf]'); if (!a) return; if (a.dataset.pf === 'add') this.txModal(); if (a.dataset.pf === 'tx') this.tabs.set('tx'); });
+    $('#pf-hold').addEventListener('click', e => {
+      const tr = e.target.closest('tr[data-s]'); if (!tr) return;
+      const s = tr.dataset.s, b = e.target.closest('[data-act]');
+      if (/^(CASH|MANUAL):/.test(s)) return;
+      if (b && b.dataset.act === 'fa') return go('stock', s);
+      if (b && b.dataset.act === 'buy') return this.txModal(null, s);
+      openDES(resolveSym(s));
+    });
+    $('#pf-best').addEventListener('click', e => { const tr = e.target.closest('tr[data-s]'); if (tr && !/^(CASH|MANUAL):/.test(tr.dataset.s)) openDES(resolveSym(tr.dataset.s)); });
+    $('#pf-eval').onclick = () => this.evaluate();
+    // transactions & sources
+    $('#gf-save').onclick = () => this.saveGf();
+    $('#gf-clear').onclick = () => this.clearExt();
+    $('#gf-file').onchange = e => this.importFile(e.target.files[0]);
+    $('#tx-exp').onclick = () => this.exportTx();
+    $('#tx-q').addEventListener('input', debounce(() => this.renderTx(true), 150));
+    $('#tx-table').addEventListener('click', e => {
+      const b = e.target.closest('[data-act]'), tr = e.target.closest('tr[data-id]'); if (!b || !tr) return;
+      if (b.dataset.act === 'edit') this.txModal(tr.dataset.id);
+      if (b.dataset.act === 'del') this.delTx(tr.dataset.id);
     });
     // watchlist
     symPicker($('#wl-in'), s => { addToWatchlist(s); $('#wl-in').value = ''; this.renderWatch(); });
@@ -2398,158 +2503,346 @@ Pages.portfolio = {
     $('#ap-edit').onclick = () => this.editApps();
     Bus.on('quotes', () => this.onQuotes());
     Bus.on('live', () => this.onQuotes());
+    Timers.add('pf-reload', 5 * 60e3, () => this.load(true), () => App.page === 'portfolio' && ['overview', 'holdings'].includes(this.view));
     Timers.add('pf-alerts', 30e3, async () => { await Store.refresh('alerts'); if (this.view === 'alerts') this.renderAlerts(); }, () => App.page === 'portfolio' && this.view === 'alerts');
     Timers.add('pf-apps', 90e3, () => this.checkApps(), () => App.page === 'portfolio' && this.view === 'apps');
     Timers.add('pf-spark', 5 * 60e3, () => loadSparks(Store.d.watchlist.items.map(i => i.symbol), $('#wl-table')), () => App.page === 'portfolio' && this.view === 'watch');
   },
-  show(sub) { this.tabs.set(sub || L().pfTab || 'positions'); this.syncLabel(); },
+  migrate() {
+    const pf = Store.d.portfolio;
+    if (!Array.isArray(pf.activities)) pf.activities = [];
+    if (Array.isArray(pf.positions) && pf.positions.length && !pf.activities.length) {
+      const today = F.dayKey(Date.now()), bc = S().baseCurrency || 'CZK';
+      pf.activities = pf.positions.map(p => (p.symbol === 'CASH'
+        ? { id: uid(), date: p.date || today, type: 'BUY', symbol: 'CASH:' + (p.currency || bc), qty: +p.qty || 0, price: 1, fee: 0, currency: p.currency || bc, account: p.account || '', comment: p.note || '', source: 'manual' }
+        : { id: uid(), date: p.date || today, type: 'BUY', symbol: p.symbol, qty: +p.qty || 0, price: +p.avg || 0, fee: 0, currency: p.currency || 'USD', account: p.account || '', comment: p.note || '', source: 'manual' }));
+      pf.positions = [];
+      Store.set('portfolio');
+      setTimeout(() => toast(`Původní pozice (${pf.activities.length}) byly převedeny na transakce – najdete je v záložce Transakce.`, 'info'), 500);
+    }
+  },
+  show(sub) { this.tabs.set(sub === 'positions' ? 'overview' : sub || L().pfTab || 'overview'); },
   hide() { Q.unsub('pf'); },
-  syncLabel() { $('#pf-sync').innerHTML = Store.server ? (Store.writable ? '<span class="badge live">uloženo na serveru</span>' : '<span class="badge err">server nezapisuje</span>') : '<span class="badge warn">jen v prohlížeči</span>'; },
   onTab(t) {
     this.view = t; L().pfTab = t; saveLayout();
-    if (t === 'positions') this.renderPositions(true);
+    $('.pf-ctl').hidden = !['overview', 'holdings'].includes(t);
+    if (t === 'overview' || t === 'holdings') this.load();
+    if (t === 'tx') { this.renderGf(); this.renderTx(); }
     if (t === 'watch') this.renderWatch();
     if (t === 'alerts') { Store.refresh('alerts').then(() => this.renderAlerts()); this.renderAlerts(); }
     if (t === 'journal') this.renderJournal();
     if (t === 'apps') { this.renderApps(); this.checkApps(); }
   },
-  onQuotes() {
-    if (App.page !== 'portfolio') return;
-    if (this.view === 'positions' && Date.now() - (this._pr || 0) > 3000) this.renderPositions();
-    if (this.view === 'alerts') this.paintAlertDist();
+  onQuotes() { if (App.page === 'portfolio' && this.view === 'alerts') this.paintAlertDist(); },
+  async refresh() {
+    const src = await API.get('api/portfolio/source').catch(() => null);
+    if (src && src.configured) { try { await API.post('api/portfolio/ghostfolio/sync'); toast('Ghostfolio synchronizováno', 'ok', { ms: 2000 }); } catch (e) { toast(esc(e.message), 'err'); } }
+    this.load(true);
   },
-  async renderPositions(first) {
-    this._pr = Date.now();
-    const pos = Store.d.portfolio.positions, base = S().baseCurrency || 'CZK';
-    const syms = [...new Set(pos.filter(p => p.symbol !== 'CASH').map(p => p.symbol))];
-    if (first) { Q.sub('pf', syms); if (syms.some(s => !Q.d[s])) Q.poll(); }
-    let fx = null;
-    try { fx = await Data.fx(); } catch {}
-    const rows = pos.map(p => {
-      const cash = p.symbol === 'CASH', q = cash ? null : Q.d[p.symbol];
-      const cur = cash ? p.currency : (q && q.currency) || p.currency || 'USD';
-      const price = cash ? 1 : q && q.price;
-      const qty = +p.qty || 0, avg = cash ? 1 : +p.avg || 0;
-      const val = isNum(price) ? price * qty : null, cost = avg * qty;
-      const vB = fxConv(val, cur, base, fx), cB = fxConv(cost, cur, base, fx);
-      const dayB = !cash && q && isNum(q.change) ? fxConv(q.change * qty, cur, base, fx) : 0;
-      return { p, q, cur, price, qty, avg, val, vB, cB, dayB, pl: vB != null && cB != null ? vB - cB : null, cls: p.cls || (cash ? 'Hotovost' : CLASS_BY_TYPE[q && q.type] || 'Ostatní') };
-    });
-    const tot = rows.reduce((s, r) => s + (r.vB || 0), 0), cost = rows.filter(r => r.p.symbol !== 'CASH').reduce((s, r) => s + (r.cB || 0), 0);
-    const inv = rows.filter(r => r.p.symbol !== 'CASH').reduce((s, r) => s + (r.vB || 0), 0), day = rows.reduce((s, r) => s + (r.dayB || 0), 0);
-    const cashV = rows.filter(r => r.p.symbol === 'CASH').reduce((s, r) => s + (r.vB || 0), 0), pl = inv - cost;
-    const kpi = (k, v, s, cls = '') => `<div class="kpi"><div class="k">${k}</div><div class="v ${cls}">${v}</div><div class="s">${s || '&nbsp;'}</div></div>`;
-    $('#pf-kpi').innerHTML = kpi('Hodnota portfolia', F.n(tot, 0) + ' ' + base, `${rows.length} pozic`) +
-      kpi('Denní změna', F.chg(day, 0) + ' ' + base, F.pct(tot - day ? day / (tot - day) * 100 : 0), F.cls(day)) +
-      kpi('Nerealizovaný P&L', F.chg(pl, 0) + ' ' + base, F.pct(cost ? pl / cost * 100 : 0), F.cls(pl)) +
-      kpi('Investováno (nákup)', F.n(cost, 0) + ' ' + base, 'pořizovací hodnota') +
-      kpi('Hotovost', F.n(cashV, 0) + ' ' + base, F.n(tot ? cashV / tot * 100 : 0, 1) + ' % portfolia') +
-      kpi('Kurzy', fx ? `EUR ${F.n(fx.rates.EUR, 2)}` : '—', fx ? `USD ${F.n(fx.rates.USD, 2)} · ČNB ${esc(fx.date || '')}` : '');
-    if (!rows.length) {
-      $('#pf-table').innerHTML = '<div class="empty">Portfolio je prázdné. Přidejte první pozici tlačítkem <b>+ Přidat pozici</b> nebo importujte CSV (symbol, množství, nákupní cena, měna, třída, účet, poznámka).</div>';
-      $('#pf-alloc1').innerHTML = $('#pf-alloc2').innerHTML = '<div class="empty">—</div>';
+  async load(force) {
+    if (!Store.server) { $('#pf-ov').innerHTML = '<div class="empty">Portfolio vyžaduje běžící server FinTerm.</div>'; return; }
+    const key = this.base + '|' + this.bench;
+    if (!force && this.an && this._key === key && Date.now() - this._t < 60e3) { this.renderAll(); return; }
+    if (!this.an || this._key !== key) { $('#pf-kpi').innerHTML = '<div class="loading" style="grid-column:1/-1">Počítám portfolio (historické ceny, kurzy, výkonnost)</div>'; }
+    try { this.an = await API.get(`api/portfolio/analysis?base=${this.base}&bench=${encodeURIComponent(this.bench)}`, 120000); this._key = key; this._t = Date.now(); }
+    catch (e) { $('#pf-kpi').innerHTML = `<div class="empty" style="grid-column:1/-1">Analýza selhala: ${esc(e.message)}</div>`; return; }
+    this.renderAll();
+  },
+  renderAll() {
+    const a = this.an;
+    this.renderSrc();
+    if (!a || a.empty) {
+      $('#pf-kpi').innerHTML = `<div class="card" style="grid-column:1/-1"><div class="card-b empty">Portfolio je zatím prázdné.<br><br><button class="btn pri" data-pf="tx">Propojit Ghostfolio nebo importovat export</button> <button class="btn" data-pf="add">+ Přidat transakci ručně</button></div></div>`;
+      ['#pf-chart', '#pf-alloc', '#pf-xray', '#pf-best', '#pf-risk', '#pf-div', '#pf-hold'].forEach(s => { const el = $(s); if (el && s !== '#pf-chart') el.innerHTML = ''; });
+      $('#pf-hold').innerHTML = '<div class="empty">Žádné pozice</div>';
+      return;
+    }
+    this.renderKpi(); this.renderChart(); this.renderAlloc(); this.renderXray(); this.renderBest(); this.renderRisk(); this.renderDiv(); this.renderHoldings();
+  },
+  renderSrc() {
+    const s = this.an && this.an.source;
+    const el = $('#pf-src');
+    if (!s || !s.type) { el.innerHTML = s && s.manual ? `<span class="badge">ruční transakce</span>` : ''; return; }
+    el.innerHTML = s.type === 'ghostfolio-api' ? `<span class="badge live" title="${esc(s.url || '')}">Ghostfolio · ${esc(F.dt(s.syncedAt))}</span>` : `<span class="badge blue">Ghostfolio export · ${esc(F.date(s.syncedAt))}</span>`;
+    if (s.error) el.innerHTML += ` <span class="badge err" title="${esc(s.error)}">chyba synchronizace</span>`;
+  },
+  renderKpi() {
+    const s = this.an.summary, b = this.an.base;
+    const k = (t, v, sub, cls = '', title = '') => `<div class="kpi" ${title ? `title="${esc(title)}"` : ''}><div class="k">${t}</div><div class="v ${cls}">${v}</div><div class="s">${sub || '&nbsp;'}</div></div>`;
+    const ann = s.irr != null && this.an.days >= 365 ? ` · XIRR ${F.pct(s.irr, 1)} p.a.` : '';
+    $('#pf-kpi').innerHTML =
+      k('Hodnota portfolia', F.n(s.value, 0) + ' ' + b, `${this.an.holdings.length} pozic${s.cash ? ' · hotovost ' + F.big(s.cash, 1) : ''}`) +
+      k('Celkový zisk', F.chg(s.net, 0) + ' ' + b, `${F.pct(s.simple, 1)} z nákupní ceny`, F.cls(s.net), 'Nerealizovaný zisk otevřených pozic + realizovaný zisk + dividendy') +
+      k('Dnes', F.chg(s.dayChange, 0) + ' ' + b, F.pct(s.dayPct), F.cls(s.dayChange)) +
+      k('Investováno', F.n(s.invested, 0) + ' ' + b, 'nákupní cena otevřených pozic') +
+      k('Výkonnost (TWR)', F.pct(s.twr, 1), `ROAI ${F.pct(s.roai, 1)}${ann}`, F.cls(s.twr), 'TWR = časově vážený výnos (nezávislý na vkladech) · ROAI = výnos na průměrně investovaný kapitál (výchozí metoda Ghostfolia) · XIRR = roční peněžně vážený výnos') +
+      k('Dividendy', F.n(s.projDiv, 0) + ' ' + b, `odhad na 12 měsíců · výnos ${F.n(s.projYield, 2)} %`);
+  },
+  rangeStart(t) {
+    const last = t[t.length - 1], D = 864e5;
+    return { '1M': last - 30 * D, '3M': last - 91 * D, '6M': last - 182 * D, '1R': last - 365 * D, YTD: Date.UTC(new Date(last).getUTCFullYear(), 0, 1) }[this.range] ?? t[0];
+  },
+  renderChart() {
+    const a = this.an; if (!a || a.empty) return;
+    const S2 = a.series, t0 = this.rangeStart(S2.t);
+    let from = S2.t.findIndex(t => t >= t0); if (from < 0) from = 0;
+    const T = S2.t.slice(from), bName = (this.BENCH.find(x => x[0] === a.bench) || [, a.bench])[1];
+    if (!this.ch) this.ch = new Chart($('#pf-chart'));
+    const at = (arr, i) => arr[from + i];
+    if (this.mode === 'perf') {
+      const i0 = S2.index[from], b0 = S2.bench[from];
+      const series = [{ name: 'Portfolio (TWR)', data: T.map((t, i) => [t, (at(S2.index, i) / i0 - 1) * 100]), color: '#5c87ff', width: 2.2, area: true }];
+      if (b0) series.push({ name: bName, data: T.map((t, i) => [t, at(S2.bench, i) != null ? (at(S2.bench, i) / b0 - 1) * 100 : null]), color: '#f0a92e', width: 1.6 });
+      this.ch.set(series, { unit: ' %', zero: true, fmtY: undefined });
+      const pr = (S2.index[S2.index.length - 1] / i0 - 1) * 100, br = b0 ? (S2.bench[S2.bench.length - 1] / b0 - 1) * 100 : null;
+      $('#pf-chart-note').innerHTML = `Za období: portfolio <b class="${F.cls(pr)}">${F.pct(pr, 1)}</b>${br != null ? ` · ${esc(bName)} <b class="${F.cls(br)}">${F.pct(br, 1)}</b> · rozdíl <b class="${F.cls(pr - br)}">${F.chg(pr - br, 1)} p.b.</b>` : ''}. Časově vážený výnos – očištěný o vklady a výběry.`;
     } else {
-      rows.sort((a, b) => (b.vB || 0) - (a.vB || 0));
-      $('#pf-table').innerHTML = `<table class="t"><thead><tr><th>Instrument</th><th class="l">Třída</th><th>Množství</th><th>Nákup</th><th>Cena</th><th>Den</th><th>Hodnota</th><th>Hodnota ${base}</th><th>P&L ${base}</th><th>P&L %</th><th>Váha</th><th></th></tr></thead><tbody>${rows.map(r => {
-        const cash = r.p.symbol === 'CASH';
-        return `<tr class="click" data-id="${esc(r.p.id)}"><td><span class="sym">${esc(cash ? 'HOTOVOST' : r.p.symbol)}</span><span class="nm">${esc(cash ? (r.p.account || r.cur) : (r.q && r.q.name) || r.p.note || '')}</span></td><td class="l tdn" style="font-size:.8rem;color:var(--muted)">${esc(r.cls)}</td><td>${F.n(r.qty, r.qty % 1 ? 4 : 0)}</td><td>${cash ? '' : F.p(r.avg)}</td><td>${cash ? '' : isNum(r.price) ? F.p(r.price) : '…'}</td><td class="${cash ? '' : F.cls(r.q && r.q.changePct)}">${cash ? '' : F.pct(r.q && r.q.changePct)}</td><td>${isNum(r.val) ? F.n(r.val, 0) + ' ' + esc(r.cur) : '—'}</td><td>${F.n(r.vB, 0)}</td><td class="${F.cls(r.pl)}">${cash ? '' : F.chg(r.pl, 0)}</td><td class="${F.cls(r.pl)}">${cash || !r.cB ? '' : F.pct(r.pl / r.cB * 100)}</td><td>${tot ? F.n((r.vB || 0) / tot * 100, 1) + ' %' : ''}</td><td class="nowrap"><button class="btn sm ghost" data-act="edit" title="Upravit">✎</button><button class="btn sm ghost danger" data-act="del" title="Smazat">✕</button></td></tr>`;
-      }).join('')}</tbody></table>`;
-      const byCls = {};
-      rows.forEach(r => { byCls[r.cls] = (byCls[r.cls] || 0) + (r.vB || 0); });
-      const s1 = Object.entries(byCls).sort((a, b) => b[1] - a[1]).map(([l, v], i) => ({ l, v, c: PALETTE[i % PALETTE.length] }));
-      const top = rows.slice(0, 8).map((r, i) => ({ l: r.p.symbol === 'CASH' ? 'Hotovost ' + r.cur : r.p.symbol, v: r.vB || 0, c: PALETTE[i % PALETTE.length] }));
-      const rest = rows.slice(8).reduce((s, r) => s + (r.vB || 0), 0);
-      if (rest > 0) top.push({ l: 'Ostatní', v: rest, c: '#3a4554' });
-      $('#pf-alloc1').innerHTML = `<div class="row" style="flex-wrap:nowrap;gap:14px">${donut(s1, 130, 18, '')}<div style="flex:1">${legend(s1)}</div></div>`;
-      $('#pf-alloc2').innerHTML = `<div class="row" style="flex-wrap:nowrap;gap:14px">${donut(top, 130, 18, '')}<div style="flex:1">${legend(top)}</div></div>`;
-      // daily snapshot
-      const complete = rows.every(r => r.vB != null);
-      if (complete && tot > 0) {
-        const h = Store.d.portfolio.history, d = F.dayKey(Date.now()), last = h[h.length - 1];
-        if (!last || last.d !== d) { h.push({ d, v: Math.round(tot), b: base }); if (h.length > 1500) h.splice(0, h.length - 1500); Store.set('portfolio'); }
-        else if (Math.abs(last.v - tot) / tot > 0.002) { last.v = Math.round(tot); last.b = base; Store.set('portfolio'); }
-      }
-    }
-    if (first || !this.hist) {
-      const h = Store.d.portfolio.history.filter(x => x.b === base);
-      if (!this.hist) this.hist = new Chart($('#pf-hist'), { empty: 'Historie se začne plnit od dnešního dne' });
-      this.hist.set(h.length > 1 ? [{ name: 'Hodnota ' + base, data: h.map(x => [Date.parse(x.d + 'T12:00:00'), x.v]), color: '#5c87ff', area: true }] : []);
+      const series = [{ name: 'Hodnota', data: T.map((t, i) => [t, at(S2.value, i)]), color: '#5c87ff', area: true, width: 2.2 }, { name: 'Investováno', data: T.map((t, i) => [t, at(S2.invested, i)]), color: '#94a3b8', step: true, dash: [5, 4], width: 1.4 }];
+      if (S2.benchValue.some(v => v != null)) series.push({ name: `Stejné vklady do ${bName}`, data: T.map((t, i) => [t, at(S2.benchValue, i)]), color: '#f0a92e', width: 1.3, dash: [2, 3] });
+      this.ch.set(series, { unit: '', zero: false, fmtY: v => F.big(v, 1) });
+      const v0 = S2.value[from], v1 = S2.value[S2.value.length - 1], inv = S2.invested[S2.invested.length - 1] - S2.invested[from];
+      $('#pf-chart-note').innerHTML = `Za období: hodnota ${F.chg(v1 - v0, 0)} ${esc(a.base)}${inv ? `, z toho čisté vklady ${F.chg(inv, 0)}` : ''} · tržní změna <b class="${F.cls(v1 - v0 - inv)}">${F.chg(v1 - v0 - inv, 0)} ${esc(a.base)}</b>. Oranžová čára = kolik by měly stejné vklady v ${esc(bName)}.`;
     }
   },
-  editPosition(id, prefill) {
-    const p = id ? Store.d.portfolio.positions.find(x => x.id === id) : { symbol: prefill || '', qty: '', avg: '', currency: '', cls: '', account: '', note: '', date: F.dayKey(Date.now()) };
-    if (!p) return;
-    const cash = p.symbol === 'CASH';
-    const m = modal(id ? 'Upravit pozici' : 'Nová pozice', `<div class="form" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
-        <label class="f">Typ<select class="in" id="pe-type"><option value="sec">Instrument (akcie, ETF, krypto…)</option><option value="cash" ${cash ? 'selected' : ''}>Hotovost</option></select></label>
-        <label class="f" id="pe-sym-l">Symbol (Yahoo)<div><input class="in" id="pe-sym" value="${esc(cash ? '' : p.symbol)}" placeholder="AAPL, CEZ.PR, BTC-USD, VWCE.DE" style="width:100%"></div></label>
-        <label class="f">Množství / částka<input class="in" id="pe-qty" value="${esc(p.qty)}" inputmode="decimal"></label>
-        <label class="f" id="pe-avg-l">Průměrná nákupní cena<input class="in" id="pe-avg" value="${esc(p.avg)}" inputmode="decimal"></label>
-        <label class="f">Měna<input class="in" id="pe-cur" value="${esc(p.currency)}" placeholder="automaticky dle kotace"></label>
-        <label class="f">Třída aktiv<select class="in" id="pe-cls"><option value="">automaticky</option>${CLASSES.map(c => `<option ${p.cls === c ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
-        <label class="f">Účet / broker<input class="in" id="pe-acc" value="${esc(p.account)}" placeholder="XTB, IBKR, Fio…"></label>
-        <label class="f">Datum nákupu<input class="in" type="date" id="pe-date" value="${esc(p.date || '')}"></label>
-      </div><label class="f" style="margin-top:8px">Poznámka<input class="in" id="pe-note" value="${esc(p.note)}"></label>
-      <div class="note" id="pe-q" style="margin-top:8px"></div>
-      <div class="row" style="margin-top:12px"><span class="sp"></span><button class="btn" id="pe-cancel">Zrušit</button><button class="btn pri" id="pe-save">Uložit</button></div>`, { size: 'narrow' });
+  renderAlloc() {
+    const a = this.an; if (!a || a.empty) return;
+    const list = a.alloc[this.allocKey] || [], tot = a.summary.value;
+    const segs = list.slice(0, 9).map((x, i) => ({ l: x.label, v: x.value, c: PALETTE[i % PALETTE.length] }));
+    const rest = list.slice(9).reduce((s, x) => s + x.value, 0);
+    if (rest > 0) segs.push({ l: `Ostatní (${list.length - 9})`, v: rest, c: '#3a4554' });
+    $('#pf-alloc').innerHTML = `<div class="row" style="flex-wrap:nowrap;gap:22px;align-items:center"><div style="flex-shrink:0">${donut(segs, 200, 28, F.big(tot, 1))}</div><div style="flex:1;min-width:0">${legend(segs)}</div></div>`;
+  },
+  renderXray() {
+    const a = this.an, H = a.holdings.filter(h => !h.cash), base = a.base, C = [];
+    const add = (lv, t, d) => C.push({ lv, t, d });
+    if (H.length) {
+      const top = H[0];
+      add(top.weight > 25 ? 'bad' : top.weight > 15 ? 'warn' : 'ok', `Největší pozice ${pfLabel(top)}: ${F.n(top.weight, 1)} %`, top.weight > 15 ? 'Jediná pozice nad 15–20 % výrazně zvyšuje riziko celého portfolia.' : 'Žádná pozice nepřesahuje 15 % portfolia.');
+      const top5 = H.slice(0, 5).reduce((s, h) => s + h.weight, 0);
+      add(top5 > 75 ? 'warn' : 'ok', `Top 5 pozic: ${F.n(top5, 0)} % portfolia`, top5 > 75 ? 'Portfolio stojí na několika titulech.' : 'Rozložení mezi největší pozice je rozumné.');
+      add(H.length < 8 ? 'warn' : 'ok', `Počet pozic: ${H.length}`, H.length < 8 ? 'Pro diverzifikaci akcií se doporučuje 15–20 titulů nebo široký ETF.' : 'Diverzifikace podle počtu titulů je v pořádku.');
+    }
+    const pct = (list, l) => (list.find(x => x.label === l) || {}).pct || 0;
+    const kr = pct(a.alloc.cls, 'Krypto');
+    if (kr) add(kr > 40 ? 'bad' : kr > 15 ? 'warn' : 'ok', `Kryptoměny: ${F.n(kr, 1)} %`, kr > 15 ? 'Velmi vysoká volatilita – zvažte cílovou váhu a pravidelné rebalancování.' : 'Podíl krypta je umírněný.');
+    const sec = a.alloc.sector.find(x => !['Krypto', 'Hotovost', 'ETF / fondy'].includes(x.label));
+    if (sec) add(sec.pct > 35 ? 'warn' : 'ok', `Nejsilnější sektor: ${sec.label} ${F.n(sec.pct, 1)} %`, sec.pct > 35 ? 'Výrazná sektorová koncentrace.' : 'Sektorově vyvážené.');
+    const foreign = 100 - pct(a.alloc.currency, base);
+    if (foreign > 0) add(foreign > 70 ? 'warn' : 'ok', `Měnové riziko: ${F.n(foreign, 0)} % mimo ${base}`, foreign > 70 ? `Výsledek v ${base} silně ovlivní kurz – např. posílení koruny sníží hodnotu zahraničních aktiv.` : 'Měnová expozice je vyvážená.');
+    const ctry = a.alloc.country.find(x => !['Krypto', 'Hotovost', 'Fondy (ostatní)', 'Globální'].includes(x.label));
+    if (ctry && ctry.pct > 60) add('info', `Geografie: ${ctry.label} ${F.n(ctry.pct, 0)} %`, 'Velká závislost na jedné ekonomice.');
+    const losers = H.filter(h => h.plPct < -30);
+    if (losers.length) add('warn', `Ve ztrátě přes 30 %: ${losers.map(pfLabel).join(', ')}`, 'Prověřte, zda investiční teze stále platí.');
+    if (a.warnings && a.warnings.length) add('bad', `Transakce s cenou mimo trh: ${a.warnings.length}`, a.warnings.slice(0, 4).map(w => `${F.date(Date.parse(w.date))} ${TX_L[w.type] ? TX_L[w.type][0].toLowerCase() : w.type} ${w.symbol} za ${F.p(w.price)} ${w.currency} (trh ${F.p(w.market)}, ${F.pct(w.dev, 0)})`).join(' · ') + ' – zkreslují výkonnost, ověřte je v Ghostfoliu.');
+    const nq = H.filter(h => h.noQuote);
+    if (nq.length) add('warn', `Bez tržní ceny: ${nq.map(pfLabel).join(', ')}`, 'Oceněno poslední transakční cenou.');
+    if (a.unknown && a.unknown.length) add('warn', `Nerozpoznané symboly: ${a.unknown.join(', ')}`, 'Oceněno transakční cenou.');
+    const ICON = { ok: ['✓', 'var(--up)'], warn: ['!', 'var(--amber)'], bad: ['✕', 'var(--down)'], info: ['i', 'var(--accent2)'] };
+    const scored = C.filter(c => c.lv !== 'info');
+    $('#pf-xs').innerHTML = `<span class="badge ${scored.every(c => c.lv === 'ok') ? 'live' : scored.some(c => c.lv === 'bad') ? 'err' : 'warn'}">${scored.filter(c => c.lv === 'ok').length} / ${scored.length} v pořádku</span>`;
+    $('#pf-xray').innerHTML = C.map(c => `<div class="chk-l" style="align-items:flex-start"><span class="ic2" style="color:${ICON[c.lv][1]}">${ICON[c.lv][0]}</span><div><div style="font-weight:600">${esc(c.t)}</div><div class="note">${esc(c.d)}</div></div></div>`).join('');
+  },
+  renderBest() {
+    const H = this.an.holdings.filter(h => !h.cash && isNum(h.plPct)).sort((x, y) => y.plPct - x.plPct);
+    const row = h => `<tr class="click" data-s="${esc(h.symbol)}"><td><span class="sym">${esc(pfLabel(h))}</span><span class="nm">${esc(h.name)}</span></td><td>${F.big(h.value, 1)}</td><td><span class="pill ${F.cls(h.plPct)}">${F.pct(h.plPct, 1)}</span></td></tr>`;
+    $('#pf-best').innerHTML = H.length ? `<table class="t compact"><tr class="sec"><td colspan="3">▲ Nejlepší</td></tr>${H.slice(0, 5).map(row).join('')}<tr class="sec"><td colspan="3">▼ Nejhorší</td></tr>${H.slice(-5).reverse().map(row).join('')}</table>` : '<div class="empty">—</div>';
+  },
+  renderRisk() {
+    const s = this.an.summary, a = this.an, bName = (this.BENCH.find(x => x[0] === a.bench) || [, a.bench])[1];
+    const S2 = a.series, bRet = S2.bench[S2.bench.length - 1] != null && S2.bench.find(v => v != null) ? (S2.bench[S2.bench.length - 1] / S2.bench.find(v => v != null) - 1) * 100 : null;
+    const r = (k, v, cls = '', t = '') => `<div class="mini" ${t ? `title="${esc(t)}"` : ''}><span class="k">${k}</span><span class="v ${cls}">${v}</span></div>`;
+    $('#pf-risk').innerHTML = r('Volatilita (roční)', isNum(s.vol) ? F.n(s.vol, 1) + ' %' : '—', '', 'směrodatná odchylka denních výnosů za posledních 12 měsíců') + r('Max. propad', F.n(s.mdd, 1) + ' %', 'dn') +
+      r(`Beta vůči ${bName}`, isNum(s.beta) ? F.n(s.beta, 2) : '—', '', '1 = pohyb stejně jako index, >1 = citlivější') + r('Sharpe ratio', isNum(s.sharpe) ? F.n(s.sharpe, 2) : '—', '', 'roční výnos nad 4 % na jednotku volatility') +
+      r('Portfolio (TWR) za celé období', F.pct(s.twr, 1), F.cls(s.twr)) + r(`${bName} za stejné období`, F.pct(bRet, 1), F.cls(bRet)) +
+      (isNum(s.benchValue) ? r(`Stejné vklady do ${bName}`, `${F.n(s.benchValue, 0)} ${esc(a.base)}`, '', 'kolik by měly vaše vklady, kdybyste je ve stejné dny investovali do indexu') + r('Vaše portfolio vs. index', F.chg(s.value - s.cash - s.benchValue, 0) + ' ' + esc(a.base), F.cls(s.value - s.cash - s.benchValue)) : '') +
+      r('Realizovaný zisk', F.chg(s.realized, 0) + ' ' + esc(a.base), F.cls(s.realized)) + r('Zaplacené poplatky', F.n(s.fees, 0) + ' ' + esc(a.base)) +
+      (s.gf ? r('Ghostfolio uvádí (čistá výkonnost)', isNum(s.gf.netPerformancePercentage) ? F.pct(s.gf.netPerformancePercentage * 100, 1) : '—', '', 'pro kontrolu – hodnota spočítaná přímo Ghostfoliem') : '');
+  },
+  renderDiv() {
+    const a = this.an, s = a.summary, months = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) { const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1)); months.push(d.toISOString().slice(0, 7)); }
+    const got = months.map(m => a.divMonths[m] || 0), sum = got.reduce((x, y) => x + y, 0);
+    const payers = a.holdings.filter(h => h.projDiv > 0).sort((x, y) => y.projDiv - x.projDiv).slice(0, 5);
+    const el = $('#pf-div');
+    el.innerHTML = `<div class="row mb" style="gap:18px"><div><div class="note">Odhad na 12 měsíců</div><div class="fa-big" style="font-size:1.6rem">${F.n(s.projDiv, 0)} <small class="dim">${esc(a.base)}</small></div></div><div><div class="note">Přijato za 12 měsíců</div><div class="fa-big" style="font-size:1.6rem">${F.n(sum, 0)} <small class="dim">${esc(a.base)}</small></div></div></div>
+      <div id="pf-divch"></div>
+      ${payers.length ? `<div class="grp-h" style="margin-top:8px">Největší plátci</div>${payers.map(h => `<div class="mini"><span class="k">${esc(pfLabel(h))} <span class="dim">${F.n(h.divYield, 2)} %</span></span><span class="v">${F.n(h.projDiv, 0)} ${esc(a.base)}</span></div>`).join('')}` : '<p class="note">Portfolio zatím nevyplácí dividendy.</p>'}`;
+    if (sum > 0) $('#pf-divch').innerHTML = gbars(months.map(m => m.slice(5) + '/' + m.slice(2, 4)), [{ name: 'Dividendy', color: '#22c37f', data: got }], 150, $('#pf-divch').clientWidth || 360);
+  },
+  renderHoldings() {
+    const a = this.an, base = a.base, H = a.holdings, tot = a.summary.value;
+    $('#pf-hcount').textContent = `${H.length} pozic · ${F.n(tot, 0)} ${base}`;
+    const fa = this.fa || {};
+    const anyFa = Object.keys(fa).length > 0;
+    const row = h => {
+      const f = fa[h.symbol];
+      const faCell = !anyFa ? '' : `<td>${f && !f.err && isNum(f.fv) ? `${F.p(f.fv)} <span class="${F.cls(f.up)}">${F.pct(f.up * 100, 0)}</span>` : f && f.loading ? '<span class="dim">…</span>' : '<span class="dim">—</span>'}</td><td>${f && isNum(f.score) ? `<b style="color:${scoreColor(f.score)}">${Math.round(f.score)}</b>` : '<span class="dim">—</span>'}</td>`;
+      return `<tr class="click" data-s="${esc(h.symbol)}"><td><span class="sym">${esc(pfLabel(h))}</span><span class="nm">${esc(h.name)}</span></td><td class="l tdn">${esc(h.cls)}${h.sector && h.sector !== h.cls ? ' · ' + esc(h.sector) : ''}</td>
+        <td>${F.n(h.qty, Math.abs(h.qty) < 10 ? 4 : 2).replace(/[,.]?0+$/, '')}</td><td>${h.cash ? '' : `${F.p(h.avg)} <span class="dim" style="font-size:.78em">${esc(h.actCurrency || '')}</span>`}</td><td>${h.cash ? '' : `${F.p(h.price)} <span class="dim" style="font-size:.78em">${esc(h.currency)}</span>`}</td>
+        <td>${h.cash || !isNum(h.dayPct) ? '' : `<span class="pill ${F.cls(h.dayPct)}">${F.pct(h.dayPct)}</span>`}</td><td><b>${F.n(h.value, 0)}</b></td>
+        <td><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><span style="display:inline-block;width:48px;height:5px;background:var(--line2);border-radius:3px;overflow:hidden"><i style="display:block;height:100%;width:${Math.min(100, h.weight)}%;background:var(--accent)"></i></span>${F.n(h.weight, 1)} %</div></td>
+        <td class="${F.cls(h.pl)}">${h.cash ? '' : F.chg(h.pl, 0)}</td><td>${h.cash || !isNum(h.plPct) ? '' : `<span class="pill ${F.cls(h.plPct)}">${F.pct(h.plPct, 1)}</span>`}</td><td class="${F.cls(h.irr)}" title="roční peněžně vážený výnos (od 3 měsíců držení)">${isNum(h.irr) ? F.pct(h.irr * 100, 1) : '<span class="dim">—</span>'}</td>
+        ${faCell}<td class="nowrap">${h.type === 'EQUITY' ? '<button class="btn sm ghost" data-act="fa" title="Analýza akcie">FA</button>' : ''}${h.cash || /^MANUAL:/.test(h.symbol) ? '' : '<button class="btn sm ghost" data-act="buy" title="Přidat transakci">+</button>'}</td></tr>`;
+    };
+    const sumPl = H.reduce((s, h) => s + (h.cash ? 0 : h.pl), 0), sumDay = H.reduce((s, h) => s + (h.dayChange || 0), 0);
+    $('#pf-hold').innerHTML = `<table class="t"><thead><tr><th>Pozice</th><th class="l">Třída · sektor</th><th>Počet</th><th>Ø nákup</th><th>Cena</th><th>Dnes</th><th>Hodnota ${esc(base)}</th><th>Váha</th><th>Zisk ${esc(base)}</th><th>Zisk %</th><th>Ročně</th>${anyFa ? '<th>Férová cena</th><th>Skóre</th>' : ''}<th></th></tr></thead><tbody>${H.map(row).join('')}
+      <tr class="sec"><td colspan="${anyFa ? 14 : 12}">Celkem</td></tr><tr><td><b>Portfolio</b></td><td></td><td></td><td></td><td></td><td class="${F.cls(sumDay)}">${F.chg(sumDay, 0)}</td><td><b>${F.n(tot, 0)}</b></td><td>100 %</td><td class="${F.cls(sumPl)}"><b>${F.chg(sumPl, 0)}</b></td><td><span class="pill ${F.cls(a.summary.simple)}">${F.pct(a.summary.simple, 1)}</span></td><td></td>${anyFa ? '<td></td><td></td>' : ''}<td></td></tr></tbody></table>`;
+    const cl = a.closed || [];
+    $('#pf-closed-c').hidden = !cl.length;
+    if (cl.length) $('#pf-closed').innerHTML = `<table class="t compact"><thead><tr><th>Pozice</th><th>Realizovaný zisk ${esc(base)}</th><th>Dividendy</th></tr></thead><tbody>${cl.map(c => `<tr><td><span class="sym">${esc(pfLabel(c))}</span><span class="nm">${esc(c.name)}</span></td><td class="${F.cls(c.realized)}">${F.chg(c.realized, 0)}</td><td>${F.n(c.dividends, 0)}</td></tr>`).join('')}</tbody></table>`;
+    if (anyFa) {
+      const eq = H.filter(h => fa[h.symbol] && isNum(fa[h.symbol].fv)), w = eq.reduce((s, h) => s + h.value, 0);
+      const up = w ? eq.reduce((s, h) => s + fa[h.symbol].up * h.value, 0) / w : null, sc = w ? eq.reduce((s, h) => s + (fa[h.symbol].score || 0) * h.value, 0) / w : null;
+      $('#pf-fa-st').innerHTML = eq.length ? `akcie: vážené skóre <b style="color:${scoreColor(sc)}">${Math.round(sc)}</b> · potenciál k férové ceně <b class="${F.cls(up)}">${F.pct(up * 100, 0)}</b>` : '';
+    }
+  },
+  async evaluate() {
+    if (!this.an || this.an.empty) return;
+    const eq = this.an.holdings.filter(h => h.type === 'EQUITY');
+    if (!eq.length) { toast('V portfoliu nejsou žádné akcie k ohodnocení.', 'info'); return; }
+    const btn = $('#pf-eval'); btn.disabled = true;
+    eq.forEach(h => { if (!this.fa[h.symbol]) this.fa[h.symbol] = { loading: true }; });
+    this.renderHoldings();
+    let i = 0, done = 0;
+    const work = async () => {
+      while (i < eq.length) {
+        const h = eq[i++];
+        try {
+          const d = await API.get('api/fundamentals?s=' + encodeURIComponent(h.symbol), 60000);
+          const a = FA.defaults(d, FA.base(d)), c = FA.compute(d, a, null);
+          this.fa[h.symbol] = { fv: c.fair.fv, up: c.fair.up, score: c.S.total };
+        } catch { this.fa[h.symbol] = { err: true }; }
+        done++; btn.textContent = `Ohodnoceno ${done}/${eq.length}`;
+        if (this.view === 'holdings') this.renderHoldings();
+      }
+    };
+    await Promise.all([work(), work()]);
+    btn.disabled = false; btn.textContent = 'Ohodnotit znovu';
+    this.renderHoldings();
+  },
+  // ── transactions & sources ──
+  async renderGf() {
+    const g = S().ghostfolio || {};
+    $('#gf-url').value = g.url || '';
+    $('#gf-token').value = g.token || '';
+    $('#gf-auto').checked = g.autoSync !== false;
+    try {
+      const src = await API.get('api/portfolio/source');
+      const st = $('#gf-st'), msg = $('#gf-msg');
+      if (src.source === 'ghostfolio-api') { st.innerHTML = '<span class="badge live">propojeno</span>'; msg.innerHTML = `Poslední synchronizace ${esc(F.dt(src.syncedAt))} · ${src.activities} transakcí · ${src.accounts.length} účtů · <span class="mono">${esc(src.url || '')}</span>`; }
+      else if (src.source === 'ghostfolio-file') { st.innerHTML = '<span class="badge blue">import ze souboru</span>'; msg.innerHTML = `Importováno ${esc(F.dt(src.syncedAt))} · ${src.activities} transakcí.`; }
+      else { st.innerHTML = '<span class="badge">nepropojeno</span>'; msg.innerHTML = ''; }
+      if (src.error) msg.innerHTML += `<div class="dn" style="margin-top:6px">Poslední pokus o synchronizaci selhal: ${esc(src.error)}</div>`;
+      if (src.unknown && src.unknown.length) msg.innerHTML += `<div class="amber" style="margin-top:6px">Nerozpoznané symboly: ${esc(src.unknown.join(', '))}</div>`;
+    } catch {}
+  },
+  async saveGf() {
+    const url = $('#gf-url').value.trim(), token = $('#gf-token').value.trim();
+    if (!/^https?:\/\//.test(url) || !token) { toast('Zadejte adresu Ghostfolia (http://…) a Security Token.', 'warn'); return; }
+    S().ghostfolio = { url, token, autoSync: $('#gf-auto').checked };
+    Store.set('settings'); await Store.flush();
+    const btn = $('#gf-save'); btn.disabled = true; btn.textContent = 'Synchronizuji…';
+    try {
+      const r = await API.post('api/portfolio/ghostfolio/sync');
+      toast(`Ghostfolio propojeno: ${r.activities} transakcí, ${r.accounts} účtů.`, 'ok');
+      this.an = null; this.renderTx(); this.renderGf();
+    } catch (e) { toast(esc(e.message), 'err', { sticky: true }); this.renderGf(); }
+    finally { btn.disabled = false; btn.textContent = 'Uložit a synchronizovat'; }
+  },
+  async clearExt() {
+    if (!confirm('Odpojit Ghostfolio a odstranit synchronizovaná / importovaná data? Ručně zadané transakce zůstanou.')) return;
+    S().ghostfolio = { url: '', token: '', autoSync: false }; Store.set('settings'); await Store.flush();
+    await API.post('api/portfolio/external/clear').catch(() => {});
+    this.an = null; this.renderGf(); this.renderTx();
+    toast('Ghostfolio odpojeno', 'info', { ms: 2500 });
+  },
+  async importFile(file) {
+    if (!file) return;
+    const st = $('#gf-file-st');
+    try {
+      const data = JSON.parse(await file.text());
+      st.innerHTML = '<span class="loading">Importuji</span>';
+      const r = await API.post('api/portfolio/import', { data });
+      st.innerHTML = `<span class="up">✓ Importováno ${r.activities} transakcí a ${r.accounts} účtů.</span>${r.unknown.length ? ` <span class="amber">Nerozpoznáno: ${esc(r.unknown.join(', '))}</span>` : ''}`;
+      this.an = null; this.renderTx(); this.renderGf();
+      toast('Portfolio importováno – přehled najdete v záložce Přehled.', 'ok');
+    } catch (e) { st.innerHTML = `<span class="dn">Import selhal: ${esc(e.message)}</span>`; }
+    $('#gf-file').value = '';
+  },
+  async renderTx(local) {
+    if (!local || !this.acts) { try { this.acts = await API.get('api/portfolio/activities'); } catch (e) { $('#tx-table').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; } }
+    const q = ($('#tx-q').value || '').toLowerCase();
+    const list = this.acts.filter(a => !q || JSON.stringify(a).toLowerCase().includes(q)).slice().reverse();
+    $('#tx-count').textContent = `${this.acts.length} transakcí`;
+    $('#tx-table').innerHTML = list.length ? `<table class="t"><thead><tr><th>Datum</th><th class="l">Typ</th><th>Symbol</th><th>Počet</th><th>Cena</th><th>Poplatek</th><th>Celkem</th><th class="l">Měna</th><th class="l">Účet</th><th class="l">Zdroj</th><th></th></tr></thead><tbody>${list.map(a => {
+      const [l, c] = TX_L[a.type] || [a.type, ''];
+      return `<tr data-id="${esc(a.id)}"><td>${esc(F.date(Date.parse(a.date + 'T12:00:00')))}</td><td class="l"><span class="badge ${c}">${l}</span></td><td><span class="sym">${esc(pfLabel(a))}</span>${a.origSymbol && a.origSymbol.toUpperCase() !== a.symbol ? `<span class="nm">${esc(a.dataSource || '')}: ${esc(a.origSymbol)}</span>` : ''}</td><td>${F.n(a.qty, 6).replace(/[,.]?0+$/, '')}</td><td>${F.p(a.price)}</td><td>${a.fee ? F.p(a.fee) : ''}</td><td>${F.n(a.qty * a.price + (a.type === 'BUY' ? a.fee : -a.fee), 2)}</td><td class="l">${esc(a.currency)}</td><td class="l tdn">${esc(a.account || '')}</td>
+        <td class="l">${a.source === 'manual' ? '<span class="badge">ručně</span>' : '<span class="badge blue">Ghostfolio</span>'}</td><td class="nowrap">${a.source === 'manual' ? '<button class="btn sm ghost" data-act="edit">✎</button><button class="btn sm ghost danger" data-act="del">✕</button>' : ''}</td></tr>`;
+    }).join('')}</tbody></table>` : '<div class="empty">Žádné transakce. Propojte Ghostfolio, importujte export nebo přidejte transakci.</div>';
+  },
+  txModal(id, prefill) {
+    const list = Store.d.portfolio.activities;
+    const a = id ? list.find(x => x.id === id) : { type: 'BUY', date: F.dayKey(Date.now()), symbol: prefill || '', qty: '', price: '', fee: 0, currency: '', account: '', comment: '' };
+    if (!a) return;
+    const cash = /^CASH:/.test(a.symbol || '');
+    const m = modal(id ? 'Upravit transakci' : 'Nová transakce', `<div class="form" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
+        <label class="f">Typ<select class="in" id="tx-type">${[['BUY', 'Nákup'], ['SELL', 'Prodej'], ['DIVIDEND', 'Dividenda'], ['INTEREST', 'Úrok'], ['FEE', 'Poplatek'], ['CASH', 'Hotovost (stav účtu)']].map(([v, l]) => `<option value="${v}" ${(cash ? 'CASH' : a.type) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="f">Datum<input class="in" type="date" id="tx-date" value="${esc(a.date)}"></label>
+        <label class="f" id="tx-sym-l">Symbol (Yahoo)<div><input class="in" id="tx-sym" value="${esc(cash ? '' : a.symbol)}" placeholder="AAPL, CEZ.PR, BTC-USD, VWCE.DE" style="width:100%"></div></label>
+        <label class="f"><span id="tx-qty-l">Počet kusů</span><input class="in" id="tx-qty" value="${esc(a.qty)}" inputmode="decimal"></label>
+        <label class="f" id="tx-price-l">Cena za kus<input class="in" id="tx-price" value="${esc(a.price)}" inputmode="decimal"></label>
+        <label class="f">Poplatek<input class="in" id="tx-fee" value="${esc(a.fee || 0)}" inputmode="decimal"></label>
+        <label class="f">Měna<input class="in" id="tx-cur" value="${esc(a.currency)}" placeholder="automaticky dle kotace"></label>
+        <label class="f">Účet / broker<input class="in" id="tx-acc" value="${esc(a.account || '')}" placeholder="XTB, IBKR, Fio…"></label>
+      </div><label class="f" style="margin-top:10px">Poznámka<input class="in" id="tx-com" value="${esc(a.comment || '')}"></label>
+      <div class="note" id="tx-q2" style="margin-top:10px"></div>
+      <div class="row" style="margin-top:14px"><span class="sp"></span><button class="btn" id="tx-cancel">Zrušit</button><button class="btn pri" id="tx-save">Uložit</button></div>`, { size: 'narrow' });
     const b = m.body;
-    const upd = () => { const c = $('#pe-type', b).value === 'cash'; $('#pe-sym-l', b).hidden = c; $('#pe-avg-l', b).hidden = c; };
-    $('#pe-type', b).onchange = upd; upd();
+    const upd = () => { const t = $('#tx-type', b).value, c = t === 'CASH'; $('#tx-sym-l', b).hidden = c; $('#tx-price-l', b).hidden = c; $('#tx-qty-l', b).textContent = c ? 'Částka' : t === 'DIVIDEND' || t === 'INTEREST' || t === 'FEE' ? 'Počet (1 = jednorázová částka)' : 'Počet kusů'; };
+    $('#tx-type', b).onchange = upd; upd();
     const look = async s => {
       s = (s || '').trim().toUpperCase(); if (!s) return;
       try {
-        const r = await API.get('api/quotes?s=' + encodeURIComponent(s)); const q = r[s];
-        if (!q) { $('#pe-q', b).innerHTML = '<span class="dn">Symbol nenalezen</span>'; return; }
-        Q.set(s, q);
-        $('#pe-q', b).innerHTML = `${esc(q.name)} · ${esc(q.exchange || '')} · <b>${F.p(q.price)} ${esc(q.currency || '')}</b>`;
-        if (!$('#pe-cur', b).value) $('#pe-cur', b).value = q.currency || '';
-        if (!$('#pe-avg', b).value) $('#pe-avg', b).value = q.price;
-      } catch (e) { $('#pe-q', b).textContent = e.message; }
+        const r = await API.get('api/quotes?s=' + encodeURIComponent(s)), q = r[s];
+        if (!q) { $('#tx-q2', b).innerHTML = '<span class="dn">Symbol nenalezen</span>'; return; }
+        $('#tx-q2', b).innerHTML = `${esc(q.name)} · ${esc(q.exchange || '')} · aktuálně <b>${F.p(q.price)} ${esc(q.currency || '')}</b>`;
+        if (!$('#tx-cur', b).value) $('#tx-cur', b).value = q.currency || '';
+        if (!$('#tx-price', b).value) $('#tx-price', b).value = q.price;
+      } catch (e) { $('#tx-q2', b).textContent = e.message; }
     };
-    symPicker($('#pe-sym', b), look);
-    $('#pe-sym', b).addEventListener('change', e => look(e.target.value));
-    if (p.symbol && !cash) look(p.symbol);
-    $('#pe-cancel', b).onclick = m.close;
-    $('#pe-save', b).onclick = () => {
-      const c = $('#pe-type', b).value === 'cash';
-      const np = { id: p.id || uid(), symbol: c ? 'CASH' : $('#pe-sym', b).value.trim().toUpperCase(), qty: numIn($('#pe-qty', b).value), avg: c ? 1 : numIn($('#pe-avg', b).value), currency: $('#pe-cur', b).value.trim() || (c ? S().baseCurrency : ''), cls: $('#pe-cls', b).value || (c ? 'Hotovost' : ''), account: $('#pe-acc', b).value.trim(), date: $('#pe-date', b).value, note: $('#pe-note', b).value.trim() };
-      if (!np.symbol || !isNum(np.qty) || !isNum(np.avg)) { toast('Vyplňte symbol, množství a nákupní cenu', 'warn'); return; }
-      const list = Store.d.portfolio.positions, i = list.findIndex(x => x.id === np.id);
-      if (i >= 0) list[i] = np; else list.push(np);
-      Store.set('portfolio'); m.close(); this.renderPositions(true);
+    symPicker($('#tx-sym', b), look);
+    $('#tx-sym', b).addEventListener('change', e => look(e.target.value));
+    if (a.symbol && !cash) look(a.symbol);
+    $('#tx-cancel', b).onclick = m.close;
+    $('#tx-save', b).onclick = async () => {
+      const t = $('#tx-type', b).value, c = t === 'CASH', cur = $('#tx-cur', b).value.trim() || (c ? S().baseCurrency : '');
+      const n = { id: a.id || uid(), source: 'manual', date: $('#tx-date', b).value, type: c ? 'BUY' : t, symbol: c ? 'CASH:' + (cur || 'CZK').toUpperCase() : $('#tx-sym', b).value.trim().toUpperCase(),
+        qty: numIn($('#tx-qty', b).value), price: c ? 1 : numIn($('#tx-price', b).value), fee: numIn($('#tx-fee', b).value) || 0, currency: cur || 'USD', account: $('#tx-acc', b).value.trim(), comment: $('#tx-com', b).value.trim() };
+      if (!n.date || !n.symbol || !isNum(n.qty) || !isNum(n.price)) { toast('Vyplňte datum, symbol, počet a cenu.', 'warn'); return; }
+      const i = list.findIndex(x => x.id === n.id);
+      if (i >= 0) list[i] = n; else list.push(n);
+      Store.set('portfolio'); await Store.flush();
+      m.close(); this.an = null; this.renderTx();
+      toast('Transakce uložena', 'ok', { ms: 2000 });
     };
   },
-  delPosition(id) {
-    const list = Store.d.portfolio.positions, i = list.findIndex(x => x.id === id);
-    if (i < 0 || !confirm(`Smazat pozici ${list[i].symbol}?`)) return;
-    list.splice(i, 1); Store.set('portfolio'); this.renderPositions(true);
+  async delTx(id) {
+    const list = Store.d.portfolio.activities, i = list.findIndex(x => x.id === id);
+    if (i < 0 || !confirm('Smazat transakci?')) return;
+    list.splice(i, 1); Store.set('portfolio'); await Store.flush(); this.an = null; this.renderTx();
   },
-  exportCSV() {
-    const h = ['symbol', 'qty', 'avg', 'currency', 'class', 'account', 'date', 'note'];
-    const rows = Store.d.portfolio.positions.map(p => [p.symbol, p.qty, p.avg, p.currency, p.cls, p.account, p.date, p.note].map(csvCell).join(','));
-    downloadFile(`finterm-portfolio-${F.dayKey(Date.now())}.csv`, [h.join(','), ...rows].join('\n'), 'text/csv');
-  },
-  async importCSV(file) {
-    if (!file) return;
-    const rows = parseCSV(await file.text());
-    if (!rows.length) return;
-    const hasHdr = /symbol/i.test(rows[0][0]);
-    let n = 0;
-    for (const r of rows.slice(hasHdr ? 1 : 0)) {
-      const qty = numIn(r[1]), avg = numIn(r[2]);
-      if (!r[0] || !isNum(qty)) continue;
-      Store.d.portfolio.positions.push({ id: uid(), symbol: r[0].trim().toUpperCase(), qty, avg: isNum(avg) ? avg : 1, currency: (r[3] || '').trim(), cls: (r[4] || '').trim(), account: (r[5] || '').trim(), date: (r[6] || '').trim(), note: (r[7] || '').trim() });
-      n++;
-    }
-    Store.set('portfolio'); $('#pf-imp').value = '';
-    toast(`Importováno ${n} pozic`, 'ok'); this.renderPositions(true);
+  exportTx() {
+    const h = ['date', 'type', 'symbol', 'quantity', 'unitPrice', 'fee', 'currency', 'account', 'source', 'comment'];
+    const rows = (this.acts || []).map(a => [a.date, a.type, a.symbol, a.qty, a.price, a.fee, a.currency, a.account, a.source, a.comment].map(csvCell).join(','));
+    downloadFile(`finterm-transakce-${F.dayKey(Date.now())}.csv`, [h.join(','), ...rows].join('\n'), 'text/csv');
   },
   renderWatch() {
     const items = Store.d.watchlist.items;
     Q.sub('pf', items.map(i => i.symbol));
     $('#wl-table').innerHTML = items.length ? `<table class="t"><thead><tr><th>Symbol</th><th>Cena</th><th>Změna</th><th>%</th><th>Denní rozpětí</th><th class="c">52 týdnů</th><th>Objem</th><th class="l">Stav</th><th>1D</th><th class="l">Poznámka</th><th></th></tr></thead><tbody>${items.map((it, i) => {
       const y = it.symbol;
-      return `<tr class="click" data-i="${i}"><td><span class="sym">${esc(byY[y] ? byY[y].l : y)}</span><span class="nm">${qc(y, 'name')}</span></td><td>${qc(y)}</td><td>${qc(y, 'chg')}</td><td>${qc(y, 'pct')}</td><td class="dim">${qc(y, 'range')}</td><td class="c"><span class="bar52" data-q="${esc(y)}" data-f="bar52"></span></td><td>${qc(y, 'vol')}</td><td class="l dim" style="font-family:var(--sans);font-size:.78rem">${qc(y, 'state')}</td><td data-sp="${esc(y)}"></td><td class="l tdn" style="font-size:.8rem;max-width:12rem" data-act="note" title="Klikněte pro úpravu">${esc(it.note || '✎')}</td><td class="nowrap"><button class="btn sm ghost" data-act="fa" title="Analýza akcie (FA)">FA</button><button class="btn sm ghost" data-act="chart" title="Graf">📈</button><button class="btn sm ghost" data-act="alert" title="Alert">🔔</button><button class="btn sm ghost" data-act="up">▲</button><button class="btn sm ghost" data-act="down">▼</button><button class="btn sm ghost danger" data-act="del">✕</button></td></tr>`;
+      return `<tr class="click" data-i="${i}"><td><span class="sym">${esc(byY[y] ? byY[y].l : y)}</span><span class="nm">${qc(y, 'name')}</span></td><td>${qc(y)}</td><td>${qc(y, 'chg')}</td><td>${qc(y, 'pct', 'pill')}</td><td class="dim">${qc(y, 'range')}</td><td class="c"><span class="bar52" data-q="${esc(y)}" data-f="bar52"></span></td><td>${qc(y, 'vol')}</td><td class="l dim" style="font-family:var(--sans);font-size:.78rem">${qc(y, 'state')}</td><td data-sp="${esc(y)}"></td><td class="l tdn" style="font-size:.8rem;max-width:12rem" data-act="note" title="Klikněte pro úpravu">${esc(it.note || '✎')}</td><td class="nowrap"><button class="btn sm ghost" data-act="fa" title="Analýza akcie (FA)">FA</button><button class="btn sm ghost" data-act="chart" title="Graf">📈</button><button class="btn sm ghost" data-act="alert" title="Alert">🔔</button><button class="btn sm ghost" data-act="up">▲</button><button class="btn sm ghost" data-act="down">▼</button><button class="btn sm ghost danger" data-act="del">✕</button></td></tr>`;
     }).join('')}</tbody></table>` : '<div class="empty">Watchlist je prázdný – přidejte symbol nahoře.</div>';
     paintQuotes();
     loadSparks(items.map(i => i.symbol), $('#wl-table'));
@@ -3124,6 +3417,8 @@ Pages.stock = {
     body.addEventListener('input', onA);
     body.addEventListener('change', onA);
     body.addEventListener('click', e => {
+      const tb = e.target.closest('[data-fa-tab]');
+      if (tb && this.tabs) { this.tabs.set(tb.dataset.faTab); return; }
       const el = e.target.closest('[data-fa]');
       if (!el || !this.d) return;
       const y = this.d.symbol, act = el.dataset.fa;
@@ -3131,7 +3426,7 @@ Pages.stock = {
       else if (act === 'des') openDES(resolveSym(y));
       else if (act === 'wl') addToWatchlist(y);
       else if (act === 'alert') { go('portfolio', 'alerts'); setTimeout(() => Pages.portfolio.prefillAlert(y), 80); }
-      else if (act === 'pf') { go('portfolio', 'positions'); setTimeout(() => Pages.portfolio.editPosition(null, y), 80); }
+      else if (act === 'pf') { go('portfolio', 'tx'); setTimeout(() => Pages.portfolio.txModal(null, y), 150); }
       else if (act === 'peer') this.open(el.dataset.s);
       else if (act === 'reset') { this.a = FA.defaults(this.d, FA.base(this.d)); this.renderAssume(); this.recalc(); }
       else if (act === 'refresh') this.load(y);
@@ -3179,36 +3474,62 @@ Pages.stock = {
   },
   render() {
     const d = this.d, p = d.profile, has = (d.annual && d.annual.length > 0) || isNum(d.stats.trailingEps);
-    const head = `<div class="card mb"><div class="card-b"><div class="fa-h">
-        <div style="flex:1;min-width:16rem"><div class="nm2">${esc(d.longName || d.name)} <span class="badge blue">${esc(d.symbol)}</span> <span class="badge">${esc(d.exchange || '')}</span></div>
-          <div class="meta">${esc([p.sector, p.industry].filter(Boolean).join(' › '))}${p.country ? ' · ' + esc(p.country) : ''}${p.employees ? ' · ' + F.n(p.employees, 0) + ' zaměstnanců' : ''}${d.finCur && d.finCur !== d.currency ? ` · výkazy v ${esc(d.finCur)}, přepočet na ${esc(d.currency)} kurzem ${F.n(d.fx, 6)}` : ''}</div>
-          <div class="row" style="margin-top:8px"><button class="btn sm" data-fa="chart">📈 Graf</button><button class="btn sm" data-fa="des">DES</button><button class="btn sm" data-fa="wl">+ Watchlist</button><button class="btn sm" data-fa="alert">🔔 Alert</button><button class="btn sm" data-fa="pf">+ Portfolio</button><a class="btn sm" href="https://finance.yahoo.com/quote/${encodeURIComponent(d.symbol)}" target="_blank" rel="noopener">Yahoo ↗</a><button class="btn sm ghost" data-fa="refresh" title="Načíst znovu">⟳</button></div></div>
-        <div style="text-align:right"><div class="px">${qc(d.symbol)} <span class="dim" style="font-size:1rem">${esc(d.currency)}</span></div><div class="mono">${qc(d.symbol, 'chg')} ${qc(d.symbol, 'pct')}</div>
-          <div class="note">tržní kapitalizace ${F.big(d.marketCap)} ${esc(d.currency)}${isNum(d.stats.beta) ? ' · beta ' + F.n(d.stats.beta, 2) : ''}${d.earnings.next ? ' · výsledky ' + F.date(d.earnings.next) : ''}</div></div></div></div></div>`;
-    const techBlock = `<div class="split mb" style="grid-template-columns:minmax(0,1fr) minmax(330px,34%)"><div class="card"><div class="card-h"><span class="card-t">Cena a klouzavé průměry · 3 roky</span></div><div class="card-b"><div id="fa-pch" style="height:300px"></div></div></div>
-        <div class="card"><div class="card-h"><span class="card-t">Technická analýza</span><span class="sp"></span><span id="fa-tsum"></span></div><div class="card-b np" id="fa-tech"></div></div></div>
-      <div class="grid g2 mb"><div class="card"><div class="card-h"><span class="card-t">Výkonnost a riziko</span></div><div class="card-b" id="fa-perf"></div></div>
-        <div class="card"><div class="card-h"><span class="card-t">Srovnání s konkurencí</span><span class="sp"></span><span class="card-s">klikněte pro analýzu</span></div><div class="card-b np" id="fa-peers"><div class="loading">Načítám</div></div></div></div>`;
-    const prof = p.summary ? `<div class="card"><div class="card-h"><span class="card-t">O společnosti</span><span class="sp"></span>${p.website ? `<a class="card-s" href="${esc(p.website)}" target="_blank" rel="noopener">${esc(p.website.replace(/^https?:\/\//, ''))}</a>` : ''}<a class="card-s" href="https://translate.google.com/?sl=en&tl=cs&text=${encodeURIComponent(p.summary.slice(0, 1500))}" target="_blank" rel="noopener">přeložit ↗</a></div><div class="card-b note" style="font-size:.86rem;color:var(--muted)">${esc(p.summary)}</div></div>` : '';
+    const meta = [[p.sector, p.industry].filter(Boolean).join(' › '), p.country, p.employees ? F.n(p.employees, 0) + ' zaměstnanců' : '', d.earnings.next ? 'výsledky ' + F.date(d.earnings.next) : '', d.finCur && d.finCur !== d.currency ? `výkazy v ${d.finCur} → ${d.currency}` : ''].filter(Boolean).map(esc).join(' · ');
+    const SEC = has ? [['ov', 'Přehled'], ['val', 'Valuace'], ['ratios', 'Ukazatele'], ['fin', 'Výkazy'], ['tech', 'Technika'], ['peers', 'Konkurence & profil']] : [['tech', 'Technika'], ['peers', 'Konkurence & profil']];
+    if (!SEC.some(s => s[0] === this.sec)) this.sec = SEC[0][0];
+    const head = `<div class="fa-sticky"><div class="fa-sum">
+      <div class="top">
+        <div style="flex:1;min-width:15rem"><div class="nm2">${esc(d.longName || d.name)} <span class="badge blue">${esc(d.symbol)}</span> <span class="badge">${esc(d.exchange || '')}</span></div><div class="meta">${meta}</div></div>
+        <div class="fa-kv"><span class="k">Cena ${esc(d.currency)}</span><span class="v">${qc(d.symbol)}</span><span class="s">${qc(d.symbol, 'pct', 'pill')}</span></div>
+        ${has ? `<div class="fa-kv"><span class="k">Férová cena</span><span class="v" id="fa-s-fv">—</span><span class="s" id="fa-s-up"></span></div>
+        <div class="fa-kv"><span class="k">Skóre</span><span class="v" id="fa-s-sc">—</span><span class="s dim">ze 100</span></div>` : ''}
+        <div class="fa-kv"><span class="k">Tržní kap.</span><span class="v" style="font-size:1.15rem">${F.big(d.marketCap, 1)}</span><span class="s dim">${isNum(d.stats.beta) ? 'beta ' + F.n(d.stats.beta, 2) : '&nbsp;'}</span></div>
+      </div>
+      <div class="bar"><div class="tabs" data-g="fa">${SEC.map(([k, l]) => `<button class="tab" data-t="${k}">${l}</button>`).join('')}</div><span class="sp"></span>
+        <div class="row" style="gap:2px;padding:4px 0">${[['chart', '📈 Graf'], ['des', 'DES'], ['wl', '+ Watchlist'], ['alert', '🔔 Alert'], ['pf', '+ Portfolio']].map(([a, l]) => `<button class="btn sm ghost" data-fa="${a}">${l}</button>`).join('')}<a class="btn sm ghost" href="https://finance.yahoo.com/quote/${encodeURIComponent(d.symbol)}" target="_blank" rel="noopener">Yahoo ↗</a><button class="btn sm ghost" data-fa="refresh" title="Načíst znovu">⟳</button></div></div>
+    </div></div>`;
+    const tech = `<div data-g="fa" data-p="tech"><div class="split mb" style="grid-template-columns:minmax(0,1fr) minmax(340px,34%)"><div class="card"><div class="card-h"><span class="card-t">Cena a klouzavé průměry · 3 roky</span></div><div class="card-b"><div id="fa-pch" style="height:340px"></div></div></div>
+        <div class="card"><div class="card-h"><span class="card-t">Technické signály</span><span class="sp"></span><span id="fa-tsum"></span></div><div class="card-b np" id="fa-tech"></div></div></div>
+      <div class="card mb"><div class="card-h"><span class="card-t">Výkonnost a riziko</span></div><div class="card-b" id="fa-perf"></div></div></div>`;
+    const peers = `<div data-g="fa" data-p="peers"><div class="card mb"><div class="card-h"><span class="card-t">Srovnání s konkurencí</span><span class="sp"></span><span class="card-s">klikněte na firmu pro její analýzu</span></div><div class="card-b np" id="fa-peers"><div class="loading">Načítám</div></div></div>
+      ${p.summary ? `<div class="card mb"><div class="card-h"><span class="card-t">O společnosti</span><span class="sp"></span>${p.website ? `<a class="card-s" href="${esc(p.website)}" target="_blank" rel="noopener">${esc(p.website.replace(/^https?:\/\//, ''))}</a>` : ''}<a class="card-s" href="https://translate.google.com/?sl=en&tl=cs&text=${encodeURIComponent(p.summary.slice(0, 1500))}" target="_blank" rel="noopener">přeložit ↗</a></div><div class="card-b" style="font-size:.92rem;color:var(--text2);line-height:1.6;max-width:70rem">${esc(p.summary)}</div></div>` : ''}</div>`;
     if (!has) {
-      $('#fa-body').innerHTML = head + `<div class="card mb"><div class="card-b note">Pro <b>${esc(d.symbol)}</b> (${esc(d.type || '')}) nejsou k dispozici účetní výkazy – fundamentální valuace je určena pro akcie. Níže je technická analýza a výkonnost.</div></div>` + techBlock + prof;
-      this.renderTech(); this.renderPeers(); paintQuotes(); return;
+      $('#fa-body').innerHTML = head + `<div class="card mb"><div class="card-b note">Pro <b>${esc(d.symbol)}</b> (${esc(d.type || '')}) nejsou k dispozici účetní výkazy – fundamentální valuace je určena pro akcie. K dispozici je technická analýza, výkonnost a srovnání.</div></div>` + tech + peers;
+    } else {
+      $('#fa-body').innerHTML = `${head}
+      <div data-g="fa" data-p="ov">
+        <div class="grid g3 mb">
+          <div class="card"><div class="card-h"><span class="card-t">Férová cena</span><span class="sp"></span><span class="card-s">medián modelů</span></div><div class="card-b" id="fa-fv"></div></div>
+          <div class="card"><div class="card-h"><span class="card-t">Skóre akcie</span></div><div class="card-b" id="fa-score"></div></div>
+          <div class="card"><div class="card-h"><span class="card-t">Analytici</span><span class="sp"></span><span class="card-s">${d.fin.analysts ? d.fin.analysts + ' analytiků' : ''}</span></div><div class="card-b" id="fa-an"></div></div></div>
+        <div class="card mb"><div class="card-h"><span class="card-t">Klíčové ukazatele</span><span class="sp"></span><button class="btn sm ghost" data-fa-tab="ratios">všechny ukazatele →</button></div><div class="card-b"><div class="grid auto" style="--min:150px" id="fa-key"></div></div></div>
+        <div class="card mb"><div class="card-h"><span class="card-t">Valuační modely</span><span class="card-s">pruh = rozpětí · značka = odhad · bílá čára = cena · modrá = férová cena</span><span class="sp"></span><button class="btn sm ghost" data-fa-tab="val">upravit předpoklady →</button></div><div class="card-b" id="fa-ff"></div></div></div>
+      <div data-g="fa" data-p="val">
+        <div class="card mb"><div class="card-h"><span class="card-t">Předpoklady modelů</span><span class="card-s">změny se hned promítnou do férové ceny v záhlaví</span><span class="sp"></span><button class="btn sm" data-fa="reset">Výchozí hodnoty</button></div><div class="card-b"><div class="as-grid" id="fa-as"></div><div class="note" id="fa-as-note" style="margin-top:10px"></div></div></div>
+        <div class="grid g2 mb"><div class="card"><div class="card-h"><span class="card-t">Výsledky modelů</span></div><div class="card-b np" id="fa-models"></div></div>
+          <div class="card"><div class="card-h"><span class="card-t">DCF projekce · 10 let</span></div><div class="card-b np" id="fa-dcf"></div></div></div></div>
+      <div data-g="fa" data-p="ratios">
+        <div class="card mb"><div class="card-h"><span class="card-t">Ukazatele</span><span class="card-s">TTM = posledních 12 měsíců · zelená = dobré · oranžová = průměr · červená = slabé</span></div><div class="card-b" id="fa-ratios"></div></div>
+        <div class="grid g2 mb"><div class="card"><div class="card-h"><span class="card-t">Piotroski F-score</span><span class="sp"></span><span id="fa-pio-s"></span></div><div class="card-b" id="fa-pio"></div></div>
+          <div class="card"><div class="card-h"><span class="card-t">Altman Z-score · riziko bankrotu</span></div><div class="card-b" id="fa-alt"></div></div></div></div>
+      <div data-g="fa" data-p="fin"><div class="card mb"><div class="card-h"><span class="card-t">Finanční výkazy</span><span class="sp"></span><span class="card-s">v ${esc(d.finCur)} · fiskální roky + TTM · pod hodnotou meziroční změna</span></div><div class="card-b"><div id="fa-finch"></div><div id="fa-fin"></div></div></div></div>
+      ${tech}${peers}`;
+      this.renderAssume(); this.renderStatic(); this.recalc();
     }
-    $('#fa-body').innerHTML = `${head}
-      <div class="grid g3 mb">
-        <div class="card"><div class="card-h"><span class="card-t">Férová cena</span><span class="sp"></span><span class="card-s">medián valuačních modelů</span></div><div class="card-b" id="fa-fv"></div></div>
-        <div class="card"><div class="card-h"><span class="card-t">Skóre akcie</span><span class="sp"></span><span class="card-s">0–100</span></div><div class="card-b" id="fa-score"></div></div>
-        <div class="card"><div class="card-h"><span class="card-t">Analytici</span><span class="sp"></span><span class="card-s">${d.fin.analysts ? d.fin.analysts + ' analytiků' : ''}</span></div><div class="card-b" id="fa-an"></div></div></div>
-      <div class="card mb"><div class="card-h"><span class="card-t">Valuační modely · football field</span><span class="sp"></span><span class="card-s">pruh = citlivostní rozpětí · značka = odhad · bílá = cena · modrá = férová cena</span></div><div class="card-b" id="fa-ff"></div></div>
-      <div class="card mb"><div class="card-h"><span class="card-t">Předpoklady modelů</span><span class="sp"></span><span class="card-s">změny se okamžitě promítnou do všech modelů</span><button class="btn sm" data-fa="reset">Výchozí</button></div><div class="card-b"><div class="as-grid" id="fa-as"></div><div class="note" id="fa-as-note" style="margin-top:8px"></div></div></div>
-      <div class="grid g2 mb"><div class="card"><div class="card-h"><span class="card-t">Detail modelů</span></div><div class="card-b np" id="fa-models"></div></div>
-        <div class="card"><div class="card-h"><span class="card-t">DCF projekce (10 let)</span></div><div class="card-b np" id="fa-dcf"></div></div></div>
-      <div class="card mb"><div class="card-h"><span class="card-t">Ukazatele</span><span class="sp"></span><span class="card-s">TTM = posledních 12 měsíců · zelená = dobré, oranžová = průměr, červená = slabé</span></div><div class="card-b" id="fa-ratios"></div></div>
-      <div class="grid g2 mb"><div class="card"><div class="card-h"><span class="card-t">Piotroski F-score</span><span class="sp"></span><span class="card-s" id="fa-pio-s"></span></div><div class="card-b" id="fa-pio"></div></div>
-        <div class="card"><div class="card-h"><span class="card-t">Altman Z-score · riziko bankrotu</span></div><div class="card-b" id="fa-alt"></div></div></div>
-      <div class="card mb"><div class="card-h"><span class="card-t">Finanční výkazy</span><span class="sp"></span><span class="card-s">v ${esc(d.finCur)} · fiskální roky + TTM</span></div><div class="card-b" id="fa-fin"></div></div>
-      ${techBlock}${prof}`;
-    this.renderAssume(); this.renderStatic(); this.renderTech(); this.renderPeers(); this.recalc(); paintQuotes();
+    this.renderTech(); this.renderPeers();
+    this.tabs = tabs($('[data-g="fa"].tabs'), t => this.onSec(t), this.sec);
+    paintQuotes();
+  },
+  onSec(t) {
+    this.sec = t;
+    if (t === 'fin') this.renderFinChart();
+    const m = $('#main'), top = $('#fa-body').offsetTop - 12;
+    if (m.scrollTop > top) m.scrollTop = top;
+  },
+  renderFinChart() {
+    const el = $('#fa-finch'), cols = this._finCols;
+    if (!el || !cols || !cols.length || !el.clientWidth) return;
+    el.innerHTML = gbars(cols.map(x => x.l), [{ name: 'Tržby', color: '#2962ff', data: cols.map(x => x.v.revenue) }, { name: 'Čistý zisk', color: '#22c37f', data: cols.map(x => x.v.netIncome) }, { name: 'Volné CF', color: '#f0a92e', data: cols.map(x => x.v.fcf) }], 210, el.clientWidth);
   },
   renderAssume() {
     const a = this.a, d = this.d, b = FA.base(d);
@@ -3236,6 +3557,10 @@ Pages.stock = {
     if (!d || !$('#fa-fv')) return;
     const c = FA.compute(d, this.a, this.peerQ);
     this.c = c;
+    const f = c.fair, [vc, vl] = FA.verdict(f.up);
+    $('#fa-s-fv').innerHTML = isNum(f.fv) ? `<span class="${F.cls(f.up)}">${F.p(f.fv)}</span>` : '—';
+    $('#fa-s-up').innerHTML = isNum(f.up) ? `<span class="verdict sm ${vc}">${vl} ${F.pct(f.up * 100, 0)}</span>` : '';
+    $('#fa-s-sc').innerHTML = isNum(c.S.total) ? `<span style="color:${scoreColor(c.S.total)}">${Math.round(c.S.total)}</span>` : '—';
     $('#fa-fv').innerHTML = fvCardHtml(d, c, this.a);
     $('#fa-ff').innerHTML = football(c.models, c.b.P, c.fair.fv, d.currency);
     $('#fa-score').innerHTML = scoreHtml(c.S);
@@ -3284,8 +3609,13 @@ Pages.stock = {
     // statements
     const A = d.annual.slice(-5), T = d.ttm || {}, cols = [...A.map(a => ({ l: 'FY ' + a.date.slice(0, 4), v: a })), ...(T.revenue != null || T.netIncome != null ? [{ l: 'TTM', v: { ...T, fcf: isNum(T.fcf) ? T.fcf : isNum(T.ocf) && isNum(T.capex) ? T.ocf + T.capex : null } }] : [])];
     const LINES = [['Tržby', 'revenue'], ['Hrubý zisk', 'grossProfit'], ['Provozní zisk', 'opIncome'], ['EBITDA', 'ebitda'], ['Čistý zisk', 'netIncome'], ['EPS (zředěný)', 'eps', 'eps'], ['Provozní cash flow', 'ocf'], ['Kapitálové výdaje', 'capex'], ['Volné cash flow', 'fcf'], ['Dividendy', 'dividends'], ['Zpětné odkupy', 'buybacks'], ['Celková aktiva', 'assets'], ['Vlastní kapitál', 'equity'], ['Celkový dluh', 'debt'], ['Hotovost a investice', 'cashSti'], ['Počet akcií', 'shares']];
-    $('#fa-fin').innerHTML = cols.length ? `${gbars(cols.map(x => x.l), [{ name: 'Tržby', color: '#2962ff', data: cols.map(x => x.v.revenue) }, { name: 'Čistý zisk', color: '#1fbf75', data: cols.map(x => x.v.netIncome) }, { name: 'Volné CF', color: '#f0a92e', data: cols.map(x => x.v.fcf) }], 190, $('#fa-fin').clientWidth - 20)}
-      <div style="overflow:auto;margin-top:8px"><table class="t compact"><thead><tr><th class="l"></th>${cols.map(x => `<th>${esc(x.l)}</th>`).join('')}</tr></thead><tbody>${LINES.filter(([, k]) => cols.some(x => isNum(x.v[k]))).map(([l, k, t]) => `<tr><td class="l" style="font-family:var(--sans)">${l}</td>${cols.map((x, i) => { const v = x.v[k], pv = i > 0 && x.l !== 'TTM' ? cols[i - 1].v[k] : null; const g = isNum(v) && isNum(pv) && pv > 0 && ['revenue', 'netIncome', 'fcf', 'eps', 'ocf', 'ebitda', 'opIncome', 'grossProfit'].includes(k) ? v / pv - 1 : null; return `<td>${isNum(v) ? (t === 'eps' ? F.n(v, 2) : F.big(v)) : '<span class="dim">—</span>'}${g != null ? `<div class="${F.cls(g)}" style="font-size:.68rem">${F.pct(g * 100, 0)}</div>` : ''}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Výkazy nejsou k dispozici</div>';
+    this._finCols = cols;
+    this.renderFinChart();
+    const pio0 = c.pio, K = [['P/E (TTM)', fx2(R.pe, 1), RCLS(R.pe, 15, 30)], ['Forward P/E', fx2(R.fpe, 1), RCLS(R.fpe, 15, 28)], ['EV/EBITDA', fx2(R.evEbitda, 1), RCLS(R.evEbitda, 10, 20)], ['FCF výnos', fp(R.fcfy), RCLS(R.fcfy, 0.05, 0.02)], ['ROE', fp(R.roe), RCLS(R.roe, 0.15, 0.08)],
+      ['Čistá marže', fp(R.nm), RCLS(R.nm, 0.15, 0.05)], ['Tržby YoY', fps(R.revYoY), RCLS(R.revYoY, 0.1, 0)], ['Dluh / vlastní kap.', fx2(R.de), RCLS(R.de, 0.5, 1.5)], ['Dividendový výnos', fp(R.dy, 2), ''], ['Piotroski', pio0 ? `${pio0.score} / ${pio0.max}` : '—', pio0 ? (pio0.score >= 7 ? 'g' : pio0.score >= 4 ? 'm' : 'b') : '']];
+    $('#fa-key').innerHTML = K.map(([k, v, cls]) => `<div class="kpi" style="background:var(--bg2)"><div class="k">${k}</div><div class="v ${cls}" style="font-size:1.3rem">${v}</div></div>`).join('');
+    $('#fa-fin').innerHTML = cols.length ? `
+      <div style="overflow:auto;margin-top:10px"><table class="t compact"><thead><tr><th class="l"></th>${cols.map(x => `<th>${esc(x.l)}</th>`).join('')}</tr></thead><tbody>${LINES.filter(([, k]) => cols.some(x => isNum(x.v[k]))).map(([l, k, t]) => `<tr><td class="l" style="font-family:var(--sans)">${l}</td>${cols.map((x, i) => { const v = x.v[k], pv = i > 0 && x.l !== 'TTM' ? cols[i - 1].v[k] : null; const g = isNum(v) && isNum(pv) && pv > 0 && ['revenue', 'netIncome', 'fcf', 'eps', 'ocf', 'ebitda', 'opIncome', 'grossProfit'].includes(k) ? v / pv - 1 : null; return `<td>${isNum(v) ? (t === 'eps' ? F.n(v, 2) : F.big(v)) : '<span class="dim">—</span>'}${g != null ? `<div class="${F.cls(g)}" style="font-size:.68rem">${F.pct(g * 100, 0)}</div>` : ''}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Výkazy nejsou k dispozici</div>';
   },
   renderTech() {
     const t = this.d.tech, s = FA.techSignals(t);
@@ -3367,7 +3697,7 @@ function openDES(sym, tab = 'overview') {
   if (y) {
     $('#ds-wl', b).onclick = () => addToWatchlist(y);
     $('#ds-al', b).onclick = () => { m.close(); go('portfolio', 'alerts'); setTimeout(() => Pages.portfolio.prefillAlert(y), 80); };
-    $('#ds-pf', b).onclick = () => { m.close(); go('portfolio', 'positions'); setTimeout(() => Pages.portfolio.editPosition(null, y), 80); };
+    $('#ds-pf', b).onclick = () => { m.close(); go('portfolio', 'tx'); setTimeout(() => Pages.portfolio.txModal(null, y), 150); };
     API.get('api/quotes?s=' + encodeURIComponent(y)).then(r => {
       const q = r[y];
       if (!q) { $('#ds-stats', b).innerHTML = '<div class="empty">Kotace nedostupná</div>'; return; }
@@ -3396,8 +3726,9 @@ function openSettings(tab = 'gen') {
   const sel = (path, label, opts) => `<label class="f">${label}<select class="in" data-s="${path}">${opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('')}</select></label>`;
   const chk = (path, label) => `<label class="chk"><input type="checkbox" data-s="${path}"> ${label}</label>`;
   const m = modal('NASTAVENÍ', `
-    <div class="subnav"><div class="tabs" data-g="st"><button class="tab" data-t="gen">Obecné</button><button class="tab" data-t="tape">Ticker</button><button class="tab" data-t="news">Zprávy</button><button class="tab" data-t="notify">Notifikace</button><button class="tab" data-t="data">Data & systém</button></div></div>
+    <div class="subnav"><div class="tabs" data-g="st"><button class="tab" data-t="gen">Obecné</button><button class="tab" data-t="tape">Ticker</button><button class="tab" data-t="news">Zprávy</button><button class="tab" data-t="conn">Propojení</button><button class="tab" data-t="notify">Notifikace</button><button class="tab" data-t="data">Data & systém</button></div></div>
     <div data-g="st" data-p="gen"><div class="form" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr))">
+      ${sel('uiScale', 'Velikost zobrazení', UI_SIZES.map(([v, l]) => [String(v), l]))}
       ${sel('baseCurrency', 'Základní měna portfolia', [['CZK', 'CZK – koruna'], ['EUR', 'EUR – euro'], ['USD', 'USD – dolar']])}
       ${sel('locale', 'Formát čísel a dat', [['cs-CZ', 'Česky (1 234,56)'], ['en-US', 'Anglicky (1,234.56)'], ['de-DE', 'Německy (1.234,56)']])}
       ${fld('timezone', 'Časové pásmo')}
@@ -3405,7 +3736,6 @@ function openSettings(tab = 'gen') {
       ${sel('newsInterval', 'Obnova zpráv', [['60', '1 min'], ['120', '2 min'], ['300', '5 min'], ['600', '10 min']])}
       ${sel('tvLocale', 'Jazyk TradingView widgetů', [['en', 'English'], ['de_DE', 'Deutsch'], ['pl', 'Polski'], ['fr', 'Français'], ['es', 'Español'], ['it', 'Italiano']])}
       ${fld('umbrelHost', 'Umbrel hostitel', 'text', `placeholder="${esc(location.hostname || 'umbrel.local')}"`)}
-      ${fld('mempoolUrl', 'Mempool API URL', 'text', 'placeholder="https://mempool.space"')}
       ${sel('rotate', 'Kiosk – automatická rotace stránek', [['0', 'vypnuto'], ['30', 'každých 30 s'], ['60', '1 min'], ['120', '2 min'], ['300', '5 min']])}
     </div>
     <div class="row" style="margin-top:12px;gap:16px">${chk('lite', 'Lite mode (RPi kiosk – méně animací, widgety na vyžádání)')}${chk('sound', 'Zvuk alertů')}${chk('newsSound', 'Zvuk breaking news')}${chk('breakingToast', 'Upozornění na breaking news')}${chk('desktopNotify', 'Systémové notifikace prohlížeče')}</div>
@@ -3419,6 +3749,18 @@ function openSettings(tab = 'gen') {
         <label class="f">Region<select class="in" id="cf-r"><option value="cz">Česko</option><option value="us">USA</option><option value="world" selected>Svět</option></select></label>
         <label class="f">Téma<select class="in" id="cf-c"><option value="macro">Makro</option><option value="markets" selected>Trhy</option><option value="crypto">Krypto</option></select></label>
         <button class="btn pri" id="cf-add" style="height:2.15rem">Přidat</button></div></div></div></div>
+    <div data-g="st" data-p="conn">
+      <div class="grp-h" style="margin-top:0">Ghostfolio (portfolio)</div>
+      <div class="form" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">${fld('ghostfolio.url', 'Adresa Ghostfolia', 'text', 'placeholder="http://umbrel.local:3334"')}${fld('ghostfolio.token', 'Security Token', 'password', 'autocomplete="off"')}</div>
+      <div class="row" style="margin-top:10px">${chk('ghostfolio.autoSync', 'Automaticky synchronizovat každých 30 minut')}<span class="sp"></span><button class="btn" id="st-gf-sync">Synchronizovat teď</button></div>
+      <div class="note" id="st-gf-res" style="margin-top:6px"></div>
+      <div class="grp-h">Vlastní Bitcoin uzel (RPC)</div>
+      <p class="note mb">Na Umbrelu se adresa a přihlašovací údaje převezmou automaticky z aplikace <b>Bitcoin Node</b>. Ručně je najdete v Bitcoin Node → <b>Connect</b> → RPC. FinTerm volá jen čtecí metody (stav synchronizace, peery, mempool, odhady poplatků).</p>
+      <div class="form" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">${fld('bitcoin.rpcUrl', 'RPC adresa', 'text', 'placeholder="automaticky (Umbrel), např. http://10.21.21.8:8332"')}${fld('bitcoin.rpcUser', 'RPC uživatel', 'text', 'autocomplete="off"')}${fld('bitcoin.rpcPass', 'RPC heslo', 'password', 'autocomplete="off"')}</div>
+      <div class="row" style="margin-top:10px"><button class="btn" id="st-node-test">Otestovat uzel</button><span class="note" id="st-node-res"></span></div>
+      <div class="grp-h">Mempool</div>
+      <div class="form" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${fld('mempoolUrl', 'Mempool API URL', 'text', 'placeholder="prázdné = automaticky (lokální Umbrel mempool, jinak mempool.space)"')}</div>
+      <div class="note" id="st-mp-res" style="margin-top:6px"></div></div>
     <div data-g="st" data-p="notify"><p class="note mb">Push notifikace odesílá <b>server</b> (24/7, i když je prohlížeč zavřený) – cenové alerty a volitelně breaking news. Doporučeno: <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> (aplikace pro Android/iOS, lze provozovat i na Umbrelu) nebo Telegram bot.</p>
       <div class="form" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">
         ${fld('notify.ntfyUrl', 'ntfy URL tématu', 'text', 'placeholder="https://ntfy.sh/moje-tajne-tema"')}${fld('notify.ntfyToken', 'ntfy access token (volitelné)', 'password')}
@@ -3439,7 +3781,7 @@ function openSettings(tab = 'gen') {
     if (el.type === 'checkbox') el.checked = !!v; else el.value = v ?? '';
     el.addEventListener('change', () => {
       let val = el.type === 'checkbox' ? el.checked : el.value;
-      if (['quoteInterval', 'newsInterval', 'rotate', 'tapeSpeed', 'notify.breakingMin'].includes(p)) val = +val;
+      if (['quoteInterval', 'newsInterval', 'rotate', 'tapeSpeed', 'notify.breakingMin', 'uiScale'].includes(p)) val = +val;
       setP(p, val);
       Store.set('settings');
       applySettings();
@@ -3454,6 +3796,19 @@ function openSettings(tab = 'gen') {
   $('#st-tape-def', b).onclick = () => { $('#st-tape', b).value = DEF.settings.tape.join(', '); };
   $('#st-tape-save', b).onclick = () => { s.tape = $('#st-tape', b).value.split(/[,\s]+/).map(x => x.trim().toUpperCase()).filter(Boolean); Store.set('settings'); Tape.build(); toast('Ticker aktualizován', 'ok', { ms: 2000 }); };
   $('#st-ntest', b).onclick = async () => { await Store.flush(); Pages.portfolio.testNotify(); };
+  $('#st-gf-sync', b).onclick = async () => {
+    await Store.flush(); $('#st-gf-res', b).innerHTML = '<span class="loading">Synchronizuji</span>';
+    try { const r = await API.post('api/portfolio/ghostfolio/sync'); $('#st-gf-res', b).innerHTML = `<span class="up">✓ ${r.activities} transakcí, ${r.accounts} účtů · ${esc(r.url)}</span>`; if (Pages.portfolio._init) Pages.portfolio.an = null; }
+    catch (e) { $('#st-gf-res', b).innerHTML = `<span class="dn">${esc(e.message)}</span>`; }
+  };
+  $('#st-node-test', b).onclick = async () => {
+    await Store.flush(); $('#st-node-res', b).innerHTML = '<span class="loading">Připojuji</span>';
+    try {
+      const n = await API.get('api/node');
+      $('#st-node-res', b).innerHTML = !n.configured ? '<span class="amber">Uzel není nastaven (chybí RPC údaje).</span>' : n.error ? `<span class="dn">${esc(n.error)}</span>` : `<span class="up">✓ ${esc(n.version || '')} · blok ${F.n(n.blocks, 0)} · ${n.connections} peerů · synchronizace ${F.n(n.progress * 100, 2)} %</span>`;
+    } catch (e) { $('#st-node-res', b).innerHTML = `<span class="dn">${esc(e.message)}</span>`; }
+  };
+  API.get('api/status').then(st => { const el = $('#st-mp-res', b); if (el) el.innerHTML = `Používá se: <span class="mono">${esc(st.mempool)}</span>${st.mempoolLocal ? ' <span class="badge live">lokální mempool</span>' : ''}`; }).catch(() => {});
   const loadFeeds = async () => {
     try {
       const feeds = await API.get('api/news/feeds');
@@ -3515,8 +3870,17 @@ function openHelp() {
 }
 
 /* ═════════════════════════ BOOT ═════════════════════════ */
+const UI_SIZES = [[0.9, 'Kompaktní'], [1, 'Standardní'], [1.12, 'Větší'], [1.25, 'Velká (TV / kiosk)'], [1.45, 'Extra velká']];
+function cycleSize() {
+  const cur = S().uiScale || 1, i = UI_SIZES.findIndex(([v]) => Math.abs(v - cur) < 0.01);
+  const [v, l] = UI_SIZES[(i + 1) % UI_SIZES.length];
+  S().uiScale = v; Store.set('settings'); applySettings();
+  toast(`Velikost zobrazení: <b>${l}</b>`, 'info', { ms: 1800 });
+}
 function applySettings() {
   const s = S();
+  document.documentElement.style.setProperty('--ui', String(s.uiScale || 1));
+  setTimeout(() => Tape.speed && Tape.syms && Tape.speed(), 50);
   F.setLocale(s.locale, s.timezone);
   document.body.classList.toggle('lite', !!s.lite);
   $('#btn-lite').classList.toggle('on', !!s.lite);
@@ -3573,6 +3937,7 @@ function clock() {
   const qp = new URLSearchParams(location.search);
   if (qp.has('lite')) S().lite = qp.get('lite') !== '0';
   if (qp.has('rotate')) S().rotate = +qp.get('rotate') || 0;
+  if (qp.has('ui')) S().uiScale = clamp(+qp.get('ui') || 1, 0.75, 2);
   applySettings();
   setSrc('server', Store.server, Store.server ? '' : 'nedostupný');
   if (!Store.server) { setSrc('quotes', false, 'vyžaduje server'); setSrc('news', false, 'vyžaduje server'); }
@@ -3603,10 +3968,12 @@ function clock() {
   ['pointerdown', 'wheel', 'touchstart'].forEach(ev => document.addEventListener(ev, () => { App.lastInput = Date.now(); }, { passive: true }));
   $('#brand').onclick = () => go('market');
   $('#btn-help').onclick = openHelp;
+  $('#btn-size').onclick = cycleSize;
   $('#btn-lite').onclick = toggleLite;
   $('#btn-full').onclick = toggleFull;
   $('#btn-settings').onclick = () => openSettings();
   $('#tape').addEventListener('click', e => { const t = e.target.closest('.ti'); if (t) showChart(resolveSym(t.dataset.k)); });
+  document.addEventListener('click', e => { const s = e.target.closest('[data-open-set]'); if (s) { e.preventDefault(); openSettings(s.dataset.openSet); } });
   document.addEventListener('keydown', e => {
     App.lastInput = Date.now();
     if (e.key === 'Escape' && closeTopModal()) return;

@@ -15,8 +15,8 @@ http://umbrel.local:8420
 | **3 · Kalendář** | Nadcházející události s odpočtem, historie *forecast vs. actual* s překvapením, filtry dopadu (1–3 býci) a zemí (USD, EUR, CZK, GBP, JPY, CNY…), centrální banky (sazby + termíny + historie), makro dashboard (FRED + ČNB, 32 ukazatelů), TradingView kalendář |
 | **4 · Zprávy** | 65 RSS zdrojů: **Česko** (ČT24, iRozhlas, Seznam Zprávy, HN, E15, iDNES, Aktuálně, Kurzy.cz, Peníze.cz…), **USA** (CNBC, NYT, Fed, SEC, MarketWatch, Axios…), **Svět** (BBC, FT, Bloomberg, Al Jazeera, DW, Guardian…). Pohledy *Témata* / *Regiony* / *LIVE feed*, breaking ticker, štítky (FED, INFLACE, VÁLKA, SANKCE…), skóre důležitosti, překlad do češtiny jedním klikem |
 | **5 · Analýza** | Heatmapa akcií (S&P 500, Nasdaq 100, Dow…), krypto treemap + dominance, síla měn vč. CZK/PLN/HUF, sektory & trhy (1D–1R), korelační matice, výnosová křivka + spready, screener |
-| **6 · Krypto** | Real-time ceny (Binance WebSocket), top 100, Bitcoin síť (poplatky, mempool, hashrate, obtížnost, halving, sats/CZK), sentiment |
-| **7 · Portfolio** | Pozice v CZK/EUR/USD s živými kurzy, alokace, vývoj hodnoty, import/export CSV, watchlist, **cenové alerty vyhodnocované serverem 24/7** s push (ntfy / Telegram / webhook), obchodní deník se statistikami, rozcestník Umbrel aplikací (Ghostfolio, Mempool, BTCPay…) |
+| **6 · Krypto** | Real-time ceny (Binance WebSocket), top 100, **vlastní Bitcoin uzel** (synchronizace, peery, mempool, odhady poplatků přímo z bitcoind), Bitcoin síť z **vlastního mempoolu** na Umbrelu (jinak mempool.space), halving, sats/CZK, sentiment |
+| **7 · Portfolio** | Portfolio ve stylu **Ghostfolia**: přímá synchronizace s vaším Ghostfoliem přes API (Security Token, automaticky každých 30 min) nebo import exportu, ruční transakce. Hodnota a výkonnost v čase (TWR, ROAI, XIRR) v CZK/USD/EUR, srovnání s indexem i „stejné vklady do S&P 500“, alokace podle pozic, tříd, sektorů (vč. rozpadu ETF), zemí, měn a účtů, **X-ray** kontrola rizik (koncentrace, krypto, měnové riziko, transakce s cenou mimo trh…), dividendy, ohodnocení akcií v portfoliu férovou cenou a skóre. Dále watchlist, **cenové alerty 24/7** s push (ntfy / Telegram / webhook), obchodní deník, rozcestník Umbrel aplikací |
 | **8 · Nástroje** | Velikost pozice, R:R & Kelly, převodník měn, pivoty & Fibonacci, složené úročení, DCA backtest, hypotéka |
 
 **Příkazová řádka** (`/` nebo začněte psát): `AAPL` (akcie → rovnou analýza a férová cena), `CEZ.PR`, `KO FA`, `CEZ DES`, `BTC GP`, `NVDA ALRT`, `CAL`, `CB`, `MACRO`, `NEWS`, `NCZ`, `HEAT`, `FX`, `CORR`, `YC`, `PORT`, `HELP`…
@@ -85,6 +85,16 @@ chromium-browser --kiosk --noerrdialogs --disable-infobars "http://umbrel.local:
 - 4K monitory: písmo se automaticky zvětšuje (2560 px a 3400 px+)
 
 Výkon: renderování probíhá v prohlížeči klienta, Pi jen servíruje data (server ~60–90 MB RAM). Skryté stránky nepollují, karta prohlížeče na pozadí se pozastaví.
+
+## Propojení s Ghostfoliem, Bitcoin uzlem a mempoolem
+
+- **Ghostfolio** – Portfolio → Transakce & zdroje (nebo Nastavení → Propojení): zadejte adresu Ghostfolia a **Security Token** (Ghostfolio → Settings). Na Umbrelu je Ghostfolio za přihlášením Umbrelu, proto FinTerm automaticky použije interní adresu `ghostfolio_server_1:3334`. Synchronizace běží každých 30 minut; token se nikdy neposílá zpět do prohlížeče.
+- **Bitcoin uzel** – na Umbrelu se RPC údaje převezmou automaticky z aplikace Bitcoin Node (`10.21.21.8:8332`). FinTerm volá jen čtecí metody. Ručně: Nastavení → Propojení.
+- **Mempool** – lokální Umbrel mempool (`10.21.21.26:3006`) se najde automaticky, jinak se použije mempool.space.
+
+## Velikost zobrazení
+
+Tlačítko **Aa** v horní liště přepíná velikost (kompaktní → extra velká), totéž v Nastavení nebo parametrem `?ui=1.25` pro kiosk/TV.
 
 ## Notifikace (alerty 24/7)
 

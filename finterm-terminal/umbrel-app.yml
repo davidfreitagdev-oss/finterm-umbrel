@@ -2,7 +2,7 @@ manifestVersion: 1
 id: finterm-terminal
 category: finance
 name: FinTerm
-version: "1.0.0"
+version: "1.2.0"
 tagline: Bloomberg-style finanční terminál – trhy, kalendář, zprávy, krypto, portfolio
 icon: https://raw.githubusercontent.com/davidfreitagdev-oss/finterm-umbrel/main/finterm-terminal/app/public/icon.svg
 description: >-
@@ -28,7 +28,8 @@ description: >-
 
   Žádné API klíče nejsou potřeba. Data jsou uložena lokálně na vašem Umbrelu.
 releaseNotes: >-
-  První verze FinTermu.
+  Nová stránka Akcie (férová cena, ukazatele, skóre), portfolio ve stylu Ghostfolia s přímou synchronizací přes Ghostfolio API,
+  panel vlastního Bitcoin uzlu a lokálního mempoolu, přepracovaný přehlednější design s volitelnou velikostí písma.
 developer: FinTerm
 website: https://github.com/davidfreitagdev-oss/finterm-umbrel
 dependencies: []
