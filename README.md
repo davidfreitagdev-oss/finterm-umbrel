@@ -11,14 +11,15 @@ http://umbrel.local:8420
 | Stránka (klávesa) | Obsah |
 |---|---|
 | **1 · Trh** | TradingView graf s vyhledáváním libovolného aktiva, 2×2 multi-chart, lehký nativní graf, watchlisty *Akcie & Indexy / Komodity / Krypto / Sazby & Měny* (FED, ECB, ČNB, US2Y–US30Y, EUR/CZK, USD/CZK…), market pulse (Fear & Greed akcie + krypto, VIX, DXY, spread 10Y–2Y, zlato/stříbro), top movers, světové burzy, důležité zprávy |
-| **2 · Kalendář** | Nadcházející události s odpočtem, historie *forecast vs. actual* s překvapením, filtry dopadu (1–3 býci) a zemí (USD, EUR, CZK, GBP, JPY, CNY…), centrální banky (sazby + termíny + historie), makro dashboard (FRED + ČNB, 32 ukazatelů), TradingView kalendář |
-| **3 · Zprávy** | 65 RSS zdrojů: **Česko** (ČT24, iRozhlas, Seznam Zprávy, HN, E15, iDNES, Aktuálně, Kurzy.cz, Peníze.cz…), **USA** (CNBC, NYT, Fed, SEC, MarketWatch, Axios…), **Svět** (BBC, FT, Bloomberg, Al Jazeera, DW, Guardian…). Pohledy *Témata* / *Regiony* / *LIVE feed*, breaking ticker, štítky (FED, INFLACE, VÁLKA, SANKCE…), skóre důležitosti, překlad do češtiny jedním klikem |
-| **4 · Analýza** | Heatmapa akcií (S&P 500, Nasdaq 100, Dow…), krypto treemap + dominance, síla měn vč. CZK/PLN/HUF, sektory & trhy (1D–1R), korelační matice, výnosová křivka + spready, screener |
-| **5 · Krypto** | Real-time ceny (Binance WebSocket), top 100, Bitcoin síť (poplatky, mempool, hashrate, obtížnost, halving, sats/CZK), sentiment |
-| **6 · Portfolio** | Pozice v CZK/EUR/USD s živými kurzy, alokace, vývoj hodnoty, import/export CSV, watchlist, **cenové alerty vyhodnocované serverem 24/7** s push (ntfy / Telegram / webhook), obchodní deník se statistikami, rozcestník Umbrel aplikací (Ghostfolio, Mempool, BTCPay…) |
-| **7 · Nástroje** | Velikost pozice, R:R & Kelly, převodník měn, pivoty & Fibonacci, složené úročení, DCA backtest, hypotéka |
+| **2 · Akcie (FA)** | Analýza libovolné akcie: **férová cena** z více modelů (2fázový DCF, Grahamův vzorec, Peter Lynch, dividendový model, P/B–ROE pro banky, srovnání s konkurencí, cílové ceny analytiků; Grahamovo číslo a EPV jako konzervativní spodní hranice), football field, **reverzní DCF** (jaký růst je v ceně), interaktivní předpoklady (růst, diskont = bezriziková sazba dané měny + β × prémie, bezpečnostní marže), skóre 0–100 (valuace, kvalita, růst, zdraví, dividenda, momentum), 50+ ukazatelů (P/E, PEG, EV/EBITDA, FCF výnos, marže, ROE, ROIC, zadlužení, výplatní poměr…), **Piotroski F-score**, **Altman Z-score**, výkazy za 4 roky + TTM, technická analýza (RSI, MACD, SMA, Bollinger), riziko (volatilita, max. propad, Sharpe), konkurence. Funguje pro US, evropské i pražské akcie a ADR (přepočet měny výkazů) |
+| **3 · Kalendář** | Nadcházející události s odpočtem, historie *forecast vs. actual* s překvapením, filtry dopadu (1–3 býci) a zemí (USD, EUR, CZK, GBP, JPY, CNY…), centrální banky (sazby + termíny + historie), makro dashboard (FRED + ČNB, 32 ukazatelů), TradingView kalendář |
+| **4 · Zprávy** | 65 RSS zdrojů: **Česko** (ČT24, iRozhlas, Seznam Zprávy, HN, E15, iDNES, Aktuálně, Kurzy.cz, Peníze.cz…), **USA** (CNBC, NYT, Fed, SEC, MarketWatch, Axios…), **Svět** (BBC, FT, Bloomberg, Al Jazeera, DW, Guardian…). Pohledy *Témata* / *Regiony* / *LIVE feed*, breaking ticker, štítky (FED, INFLACE, VÁLKA, SANKCE…), skóre důležitosti, překlad do češtiny jedním klikem |
+| **5 · Analýza** | Heatmapa akcií (S&P 500, Nasdaq 100, Dow…), krypto treemap + dominance, síla měn vč. CZK/PLN/HUF, sektory & trhy (1D–1R), korelační matice, výnosová křivka + spready, screener |
+| **6 · Krypto** | Real-time ceny (Binance WebSocket), top 100, Bitcoin síť (poplatky, mempool, hashrate, obtížnost, halving, sats/CZK), sentiment |
+| **7 · Portfolio** | Pozice v CZK/EUR/USD s živými kurzy, alokace, vývoj hodnoty, import/export CSV, watchlist, **cenové alerty vyhodnocované serverem 24/7** s push (ntfy / Telegram / webhook), obchodní deník se statistikami, rozcestník Umbrel aplikací (Ghostfolio, Mempool, BTCPay…) |
+| **8 · Nástroje** | Velikost pozice, R:R & Kelly, převodník měn, pivoty & Fibonacci, složené úročení, DCA backtest, hypotéka |
 
-**Příkazová řádka** (`/` nebo začněte psát): `AAPL`, `CEZ DES`, `BTC GP`, `NVDA ALRT`, `CAL`, `CB`, `MACRO`, `NEWS`, `NCZ`, `HEAT`, `FX`, `CORR`, `YC`, `PORT`, `HELP`…
+**Příkazová řádka** (`/` nebo začněte psát): `AAPL` (akcie → rovnou analýza a férová cena), `CEZ.PR`, `KO FA`, `CEZ DES`, `BTC GP`, `NVDA ALRT`, `CAL`, `CB`, `MACRO`, `NEWS`, `NCZ`, `HEAT`, `FX`, `CORR`, `YC`, `PORT`, `HELP`…
 
 Audit požadavků a architektura: [AUDIT.md](AUDIT.md).
 

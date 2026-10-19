@@ -215,7 +215,7 @@ function normQuote(q) {
     currency: q.currency, marketState: q.marketState, time: q.regularMarketTime ? q.regularMarketTime * 1000 : null,
     exchange: q.fullExchangeName || q.exchange, type: q.quoteType, tz: q.exchangeTimezoneName,
     high52: q.fiftyTwoWeekHigh, low52: q.fiftyTwoWeekLow, ma50: q.fiftyDayAverage, ma200: q.twoHundredDayAverage,
-    pe: q.trailingPE, fpe: q.forwardPE, eps: q.epsTrailingTwelveMonths,
+    pe: q.trailingPE, fpe: q.forwardPE, eps: q.epsTrailingTwelveMonths, fwdEps: q.epsForward, pb: q.priceToBook, bookValue: q.bookValue,
     divYield: q.dividendYield ?? (q.trailingAnnualDividendYield != null ? q.trailingAnnualDividendYield * 100 : undefined),
     delay: q.exchangeDataDelayedBy, bid: q.bid, ask: q.ask,
     prePrice: q.preMarketPrice, preChangePct: q.preMarketChangePercent,
@@ -423,6 +423,182 @@ async function getCorr(syms, days) {
     return Math.sqrt(r.reduce((s, x) => s + (x - m) ** 2, 0) / (r.length - 1)) * Math.sqrt(252) * 100;
   });
   return { symbols: syms, matrix, vol, samples: Math.max(0, dates.length - 1), from: dates[0], to: dates[dates.length - 1] };
+}
+
+// ───────────────────────────── Fundamentals (stock analyzer) ─────────────────────────────
+const TS_KEY = {
+  TotalRevenue: 'revenue', CostOfRevenue: 'cogs', GrossProfit: 'grossProfit', OperatingIncome: 'opIncome', EBIT: 'ebit', EBITDA: 'ebitda',
+  NetIncome: 'netIncome', DilutedEPS: 'eps', DilutedAverageShares: 'dilShares', OperatingCashFlow: 'ocf', CapitalExpenditure: 'capex',
+  FreeCashFlow: 'fcf', TotalAssets: 'assets', CurrentAssets: 'curAssets', CurrentLiabilities: 'curLiab', TotalLiabilitiesNetMinorityInterest: 'liab',
+  StockholdersEquity: 'equity', RetainedEarnings: 'retained', TotalDebt: 'debt', LongTermDebt: 'ltDebt', CashAndCashEquivalents: 'cash',
+  CashCashEquivalentsAndShortTermInvestments: 'cashSti', InterestExpense: 'interest', PretaxIncome: 'pretax', TaxProvision: 'tax',
+  TaxRateForCalcs: 'taxRate', CashDividendsPaid: 'dividends', RepurchaseOfCapitalStock: 'buybacks', OrdinarySharesNumber: 'shares',
+  Inventory: 'inventory', WorkingCapital: 'workingCapital', InvestedCapital: 'investedCapital', NetDebt: 'netDebt',
+  ResearchAndDevelopment: 'rnd', StockBasedCompensation: 'sbc',
+};
+// long-term government bond yield per currency (risk-free rate for discounting)
+const RF_SERIES = { USD: 'DGS10', EUR: 'IRLTLT01DEM156N', CZK: 'IRLTLT01CZM156N', GBP: 'IRLTLT01GBM156N', GBp: 'IRLTLT01GBM156N', JPY: 'IRLTLT01JPM156N', CHF: 'IRLTLT01CHM156N', PLN: 'IRLTLT01PLM156N' };
+const RF_NAME = { DGS10: 'US 10Y', IRLTLT01DEM156N: 'DE 10Y (Bund)', IRLTLT01CZM156N: 'CZ 10Y', IRLTLT01GBM156N: 'UK 10Y', IRLTLT01JPM156N: 'JP 10Y', IRLTLT01CHM156N: 'CH 10Y', IRLTLT01PLM156N: 'PL 10Y' };
+const yraw = v => (v == null ? null : typeof v === 'object' ? (v.raw ?? null) : v);
+
+async function fxFactor(from, to) {
+  if (!from || !to || from === to) return 1;
+  const fx = await cached('fx', 60e3, getFx).catch(() => null);
+  const r = (fx && fx.rates) || {};
+  if (r[from] && r[to]) return r[from] / r[to];
+  const base = c => (c === 'GBp' || c === 'GBX' ? ['GBP', 0.01] : c === 'ZAc' ? ['ZAR', 0.01] : c === 'ILA' ? ['ILS', 0.01] : c === 'USX' ? ['USD', 0.01] : [c, 1]);
+  const [f, fm] = base(from), [t, tm] = base(to);
+  if (f === t) return fm / tm;
+  const s = `${f}${t}=X`;
+  const q = (await getQuotes([s]))[s];
+  if (q && q.price) return (q.price * fm) / tm;
+  throw new Error(`FX ${from}→${to} nedostupný`);
+}
+
+function technicals(ch, rfPct) {
+  const { c, h, l, t } = ch, n = c.length;
+  if (n < 60) return null;
+  const avg = a => a.reduce((s, x) => s + x, 0) / a.length;
+  const std = a => { const m = avg(a); return Math.sqrt(a.reduce((s, x) => s + (x - m) ** 2, 0) / Math.max(1, a.length - 1)); };
+  const last = c[n - 1];
+  const pre = [0]; for (let i = 0; i < n; i++) pre.push(pre[i] + c[i]);
+  const smaAt = (k, i) => (i + 1 >= k ? (pre[i + 1] - pre[i + 1 - k]) / k : null);
+  const ema = (arr, k) => { const a = 2 / (k + 1); let e = arr[0]; return arr.map((v, i) => (e = i ? v * a + e * (1 - a) : e)); };
+  let g = 0, lo = 0;
+  for (let i = 1; i <= 14; i++) { const d = c[i] - c[i - 1]; if (d > 0) g += d; else lo -= d; }
+  g /= 14; lo /= 14;
+  for (let i = 15; i < n; i++) { const d = c[i] - c[i - 1]; g = (g * 13 + Math.max(d, 0)) / 14; lo = (lo * 13 + Math.max(-d, 0)) / 14; }
+  const rsi = lo === 0 ? 100 : 100 - 100 / (1 + g / lo);
+  const e12 = ema(c, 12), e26 = ema(c, 26), macdLine = c.map((_, i) => e12[i] - e26[i]);
+  const sig = ema(macdLine.slice(26), 9);
+  const macd = macdLine[n - 1], signal = sig[sig.length - 1];
+  const s20 = c.slice(-20), m20 = avg(s20), sd20 = std(s20);
+  let atr = 0;
+  for (let i = n - 14; i < n; i++) atr += Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1]));
+  atr /= 14;
+  const hh = Math.max(...h.slice(-14)), ll = Math.min(...l.slice(-14));
+  const at = days => { const target = t[n - 1] - days * 864e5; if (t[0] > target + 5 * 864e5) return null; for (let i = n - 1; i >= 0; i--) if (t[i] <= target) return c[i]; return null; };
+  const ret = p => (p ? (last / p - 1) * 100 : null);
+  const yr = new Date(t[n - 1]).getUTCFullYear();
+  let ytdBase = null;
+  for (let i = n - 1; i >= 0; i--) if (new Date(t[i]).getUTCFullYear() < yr) { ytdBase = c[i]; break; }
+  const i1y = Math.max(1, t.findIndex(x => x >= t[n - 1] - 365 * 864e5));
+  const lr = []; for (let i = i1y; i < n; i++) lr.push(Math.log(c[i] / c[i - 1]));
+  const vol = std(lr) * Math.sqrt(252) * 100;
+  const mdd = from => { let peak = c[from], dd = 0; for (let i = from; i < n; i++) { if (c[i] > peak) peak = c[i]; dd = Math.min(dd, c[i] / peak - 1); } return dd * 100; };
+  let cross = null;
+  for (let i = n - 1; i > Math.max(200, n - 750); i--) {
+    const a = smaAt(50, i) - smaAt(200, i), b = smaAt(50, i - 1) - smaAt(200, i - 1);
+    if (a > 0 && b <= 0) { cross = { type: 'golden', ts: t[i] }; break; }
+    if (a < 0 && b >= 0) { cross = { type: 'death', ts: t[i] }; break; }
+  }
+  const y1 = ret(at(365));
+  const c1y = c.slice(i1y - 1);
+  // chart history (last 3 years, ~250 points) with moving averages
+  const from = Math.max(0, t.findIndex(x => x >= t[n - 1] - 3 * 365 * 864e5)), step = Math.max(1, Math.round((n - from) / 260));
+  const hist = { t: [], c: [], s50: [], s200: [] };
+  for (let i = from; i < n; i += step) { hist.t.push(t[i]); hist.c.push(c[i]); hist.s50.push(smaAt(50, i)); hist.s200.push(smaAt(200, i)); }
+  if (hist.t[hist.t.length - 1] !== t[n - 1]) { hist.t.push(t[n - 1]); hist.c.push(last); hist.s50.push(smaAt(50, n - 1)); hist.s200.push(smaAt(200, n - 1)); }
+  return {
+    last, rsi, macd, macdSignal: signal, macdHist: macd - signal, sma20: smaAt(20, n - 1), sma50: smaAt(50, n - 1), sma100: smaAt(100, n - 1), sma200: smaAt(200, n - 1),
+    ema20: ema(c.slice(-120), 20).pop(), bbUpper: m20 + 2 * sd20, bbLower: m20 - 2 * sd20, bbPctB: sd20 ? (last - (m20 - 2 * sd20)) / (4 * sd20) : null,
+    atrPct: (atr / last) * 100, stoch: hh > ll ? ((last - ll) / (hh - ll)) * 100 : 50,
+    high52: Math.max(...c1y), low52: Math.min(...c1y),
+    perf: { w1: ret(at(7)), m1: ret(at(30)), m3: ret(at(91)), m6: ret(at(182)), ytd: ret(ytdBase), y1, y3: ret(at(3 * 365)), y5: ret(at(5 * 365 - 5)) },
+    vol1y: vol, mdd1y: mdd(i1y - 1), mdd5y: mdd(0), sharpe1y: vol && y1 != null ? (y1 - (rfPct || 0)) / vol : null, cross, hist,
+  };
+}
+
+function getFundamentals(sym) {
+  return cached('fund:' + sym, 6 * 3600e3, async () => {
+    const mods = 'assetProfile,financialData,defaultKeyStatistics,summaryDetail,price,earningsTrend,recommendationTrend,calendarEvents,earningsHistory';
+    const p2 = Math.floor(Date.now() / 1000), p1 = p2 - 7 * 365 * 86400;
+    const types = Object.keys(TS_KEY).flatMap(k => ['annual' + k, 'trailing' + k]).join(',');
+    const [qs, ts, ch, pe] = await Promise.all([
+      yahooJSON(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=${mods}`),
+      yahooJSON(`https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(sym)}?symbol=${encodeURIComponent(sym)}&type=${types}&period1=${p1}&period2=${p2}`).catch(() => null),
+      getChart(sym, '5y', '1d').catch(() => null),
+      yahooJSON(`https://query2.finance.yahoo.com/v6/finance/recommendationsbysymbol/${encodeURIComponent(sym)}`).catch(() => null),
+    ]);
+    const r = qs && qs.quoteSummary && qs.quoteSummary.result && qs.quoteSummary.result[0];
+    if (!r) throw Object.assign(new Error((qs && qs.quoteSummary && qs.quoteSummary.error && qs.quoteSummary.error.description) || 'fundamentální data nejsou k dispozici'), { status: 404 });
+    const fd = r.financialData || {}, ks = r.defaultKeyStatistics || {}, sd = r.summaryDetail || {}, pr = r.price || {}, ap = r.assetProfile || {};
+    // statements
+    const annualMap = {}, ttm = {}, ttmPrev = {};
+    for (const x of (ts && ts.timeseries && ts.timeseries.result) || []) {
+      const typ = x.meta && x.meta.type && x.meta.type[0];
+      const m = typ && typ.match(/^(annual|trailing)(.+)$/);
+      const key = m && TS_KEY[m[2]];
+      if (!key) continue;
+      const arr = (x[typ] || []).filter(v => v && v.reportedValue && v.reportedValue.raw != null).sort((a, b) => a.asOfDate.localeCompare(b.asOfDate));
+      if (!arr.length) continue;
+      if (m[1] === 'annual') { for (const v of arr) (annualMap[v.asOfDate] = annualMap[v.asOfDate] || { date: v.asOfDate })[key] = v.reportedValue.raw; }
+      else {
+        const lastV = arr[arr.length - 1];
+        ttm[key] = lastV.reportedValue.raw; ttm.date = ttm.date && ttm.date > lastV.asOfDate ? ttm.date : lastV.asOfDate;
+        const cutoff = isoDate(Date.parse(lastV.asOfDate) - 300 * 864e5);
+        const prev = arr.filter(v => v.asOfDate <= cutoff).pop();
+        if (prev) ttmPrev[key] = prev.reportedValue.raw;
+      }
+    }
+    const annual = Object.values(annualMap).sort((a, b) => a.date.localeCompare(b.date)).filter(a => a.revenue != null || a.netIncome != null || a.assets != null);
+    const price = yraw(fd.currentPrice) ?? yraw(pr.regularMarketPrice);
+    const currency = pr.currency || sd.currency;
+    const finCur = fd.financialCurrency || currency;
+    let fx = 1, fxErr = null;
+    try { fx = await fxFactor(finCur, currency); } catch (e) { fxErr = e.message; }
+    const rfId = RF_SERIES[currency] || 'DGS10';
+    const [rfS, aaaS] = await Promise.all([fred(rfId, isoDate(Date.now() - 500 * 864e5)).catch(() => null), fred('DAAA', isoDate(Date.now() - 120 * 864e5)).catch(() => null)]);
+    const rf = rfS ? rfS[rfS.length - 1][1] : 4.2;
+    const trend = ((r.earningsTrend && r.earningsTrend.trend) || []).map(x => ({
+      period: x.period, end: x.endDate, growth: yraw(x.growth),
+      eps: yraw(x.earningsEstimate && x.earningsEstimate.avg), epsLow: yraw(x.earningsEstimate && x.earningsEstimate.low), epsHigh: yraw(x.earningsEstimate && x.earningsEstimate.high),
+      epsYearAgo: yraw(x.earningsEstimate && x.earningsEstimate.yearAgoEps), epsAnalysts: yraw(x.earningsEstimate && x.earningsEstimate.numberOfAnalysts),
+      rev: yraw(x.revenueEstimate && x.revenueEstimate.avg), revGrowth: yraw(x.revenueEstimate && x.revenueEstimate.growth),
+    }));
+    const cal = r.calendarEvents || {};
+    const out = {
+      symbol: pr.symbol || sym, name: pr.shortName || pr.longName || sym, longName: pr.longName, type: pr.quoteType, exchange: pr.exchangeName, exchangeName: pr.exchange,
+      currency, finCur, fx, fxErr, price, change: yraw(pr.regularMarketChange), changePct: yraw(pr.regularMarketChangePercent) != null ? yraw(pr.regularMarketChangePercent) * 100 : null,
+      marketState: pr.marketState, marketCap: yraw(pr.marketCap) ?? yraw(sd.marketCap),
+      profile: { sector: ap.sector, industry: ap.industry, country: ap.country, city: ap.city, employees: ap.fullTimeEmployees, website: ap.website, summary: (ap.longBusinessSummary || '').slice(0, 1600) },
+      stats: {
+        pe: yraw(sd.trailingPE), fpe: yraw(sd.forwardPE) ?? yraw(ks.forwardPE), peg: yraw(ks.pegRatio) ?? yraw(ks.trailingPegRatio), pb: yraw(ks.priceToBook), ps: yraw(sd.priceToSalesTrailing12Months),
+        ev: yraw(ks.enterpriseValue), evEbitda: yraw(ks.enterpriseToEbitda), evRevenue: yraw(ks.enterpriseToRevenue), bookValue: yraw(ks.bookValue),
+        trailingEps: yraw(ks.trailingEps), forwardEps: yraw(ks.forwardEps), beta: yraw(ks.beta) ?? yraw(sd.beta), shares: yraw(ks.sharesOutstanding), floatShares: yraw(ks.floatShares),
+        dividendRate: yraw(sd.dividendRate) ?? yraw(sd.trailingAnnualDividendRate), dividendYield: yraw(sd.dividendYield) != null ? yraw(sd.dividendYield) * 100 : null,
+        payoutRatio: yraw(sd.payoutRatio) != null ? yraw(sd.payoutRatio) * 100 : null, divYield5y: yraw(sd.fiveYearAvgDividendYield), exDivDate: yraw(sd.exDividendDate) ? yraw(sd.exDividendDate) * 1000 : null,
+        shortPctFloat: yraw(ks.shortPercentOfFloat) != null ? yraw(ks.shortPercentOfFloat) * 100 : null, shortRatio: yraw(ks.shortRatio),
+        insiders: yraw(ks.heldPercentInsiders) != null ? yraw(ks.heldPercentInsiders) * 100 : null, institutions: yraw(ks.heldPercentInstitutions) != null ? yraw(ks.heldPercentInstitutions) * 100 : null,
+        w52change: yraw(ks['52WeekChange']) != null ? yraw(ks['52WeekChange']) * 100 : null, sp52change: yraw(ks.SandP52WeekChange) != null ? yraw(ks.SandP52WeekChange) * 100 : null,
+        high52: yraw(sd.fiftyTwoWeekHigh), low52: yraw(sd.fiftyTwoWeekLow), allTimeHigh: yraw(sd.allTimeHigh), avgVolume: yraw(sd.averageVolume),
+        lastFiscalYearEnd: yraw(ks.lastFiscalYearEnd) ? yraw(ks.lastFiscalYearEnd) * 1000 : null, mostRecentQuarter: yraw(ks.mostRecentQuarter) ? yraw(ks.mostRecentQuarter) * 1000 : null,
+      },
+      fin: {
+        targetMean: yraw(fd.targetMeanPrice), targetMedian: yraw(fd.targetMedianPrice), targetHigh: yraw(fd.targetHighPrice), targetLow: yraw(fd.targetLowPrice),
+        recMean: yraw(fd.recommendationMean), recKey: fd.recommendationKey, analysts: yraw(fd.numberOfAnalystOpinions),
+        cash: yraw(fd.totalCash), debt: yraw(fd.totalDebt), ebitda: yraw(fd.ebitda), revenue: yraw(fd.totalRevenue), grossProfit: yraw(fd.grossProfits),
+        fcf: yraw(fd.freeCashflow), ocf: yraw(fd.operatingCashflow), currentRatio: yraw(fd.currentRatio), quickRatio: yraw(fd.quickRatio), debtToEquity: yraw(fd.debtToEquity),
+        roa: yraw(fd.returnOnAssets), roe: yraw(fd.returnOnEquity), grossMargin: yraw(fd.grossMargins), opMargin: yraw(fd.operatingMargins), netMargin: yraw(fd.profitMargins),
+        ebitdaMargin: yraw(fd.ebitdaMargins), revenueGrowth: yraw(fd.revenueGrowth), earningsGrowth: yraw(fd.earningsGrowth),
+      },
+      trend,
+      recs: ((r.recommendationTrend && r.recommendationTrend.trend) || []).map(x => ({ period: x.period, strongBuy: x.strongBuy, buy: x.buy, hold: x.hold, sell: x.sell, strongSell: x.strongSell })),
+      earnings: {
+        next: ((cal.earnings && cal.earnings.earningsDate) || []).map(d => yraw(d) * 1000).filter(Boolean)[0] || null,
+        epsEstimate: yraw(cal.earnings && cal.earnings.earningsAverage), revEstimate: yraw(cal.earnings && cal.earnings.revenueAverage),
+        history: ((r.earningsHistory && r.earningsHistory.history) || []).map(x => ({ q: yraw(x.quarter) ? yraw(x.quarter) * 1000 : null, period: x.period, actual: yraw(x.epsActual), estimate: yraw(x.epsEstimate), surprise: yraw(x.surprisePercent) != null ? yraw(x.surprisePercent) * 100 : null })),
+      },
+      annual, ttm, ttmPrev,
+      rf: { rate: rf, series: rfId, name: RF_NAME[rfId] || rfId, date: rfS ? rfS[rfS.length - 1][0] : null },
+      aaa: aaaS ? aaaS[aaaS.length - 1][1] : null,
+      tech: ch && ch.c.length ? technicals(ch, rf) : null,
+      peers: (((pe && pe.finance && pe.finance.result && pe.finance.result[0] && pe.finance.result[0].recommendedSymbols) || []).map(x => x.symbol)).slice(0, 8),
+      updated: Date.now(),
+    };
+    mark('yahoo', true);
+    return out;
+  });
 }
 
 // ───────────────────────────── FX (ČNB + live) ─────────────────────────────
@@ -1164,6 +1340,11 @@ const routes = {
   },
   'GET /api/search': async q => { const t = String(q.get('q') || '').trim().slice(0, 40); return t.length < 1 ? [] : ySearch(t); },
   'GET /api/perf': async q => getPerf(cleanSymbols(q.get('s'), 40)),
+  'GET /api/fundamentals': async q => {
+    const [s] = cleanSymbols(q.get('s'), 1);
+    if (!s) throw Object.assign(new Error('missing symbol'), { status: 400 });
+    return getFundamentals(s);
+  },
   'GET /api/corr': async q => getCorr(cleanSymbols(q.get('s'), 16), Math.max(20, Math.min(480, parseInt(q.get('days') || '90', 10) || 90))),
   'GET /api/fx': async () => cached('fx', 60e3, getFx),
   'GET /api/cb': async () => getCentralBanks(),

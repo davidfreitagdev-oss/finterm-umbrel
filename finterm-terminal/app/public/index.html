@@ -311,6 +311,41 @@ tr.nowline td{padding:0!important;height:2px;background:var(--accent)!important;
 .sugg.open{display:block}
 @media (max-width:1100px){.split{grid-template-columns:minmax(0,1fr)}}
 
+/* ── stock analyzer ── */
+.fa-search{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.fa-h{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.fa-h .nm2{font-size:1.35rem;font-weight:800}
+.fa-h .meta{color:var(--muted);font-size:.84rem;margin-top:3px}
+.fa-h .px{font-family:var(--mono);font-size:1.9rem;font-weight:800;line-height:1.1}
+.fa-big{font-family:var(--mono);font-size:2.3rem;font-weight:800;line-height:1.1}
+.verdict{display:inline-block;padding:4px 10px;border-radius:5px;font-weight:800;font-size:.9rem;letter-spacing:.02em}
+.verdict.v2{background:var(--up-bg);color:var(--up)}.verdict.v1{background:rgba(31,191,117,.08);color:#7bd8a8}.verdict.v0{background:rgba(240,169,46,.14);color:var(--amber)}.verdict.v-1{background:rgba(240,68,79,.08);color:#ff8a92}.verdict.v-2{background:var(--down-bg);color:var(--down)}
+.ff{position:relative;padding:2px 0 24px;--ffl:15rem;--ffv:9.5rem}
+.ff-r{display:grid;grid-template-columns:var(--ffl) 1fr var(--ffv);gap:10px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--line);font-size:.84rem}
+.ff-r .l1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ff-r .vv{text-align:right;font-family:var(--mono);white-space:nowrap}
+.ff-t{position:relative;height:18px;background:linear-gradient(90deg,transparent,rgba(40,50,65,.25),transparent)}
+.ff-b{position:absolute;top:6px;height:6px;border-radius:3px;opacity:.5}
+.ff-m{position:absolute;top:1px;width:5px;height:16px;border-radius:2px;transform:translateX(-50%)}
+.ff-ln{position:absolute;top:0;bottom:22px;width:0;pointer-events:none;border-left:2px solid #e6edf3;z-index:1}
+.ff-ln.fv{border-left:2px dashed var(--accent2)}
+.ff-ln span{position:absolute;bottom:-19px;transform:translateX(-50%);font-size:.68rem;white-space:nowrap;font-family:var(--mono);background:var(--card);padding:0 3px}
+.ff-ax{position:absolute;bottom:0;height:16px;font-size:.66rem;color:var(--dim);font-family:var(--mono);transform:translateX(-50%)}
+.sbar{display:grid;grid-template-columns:7.5rem 1fr 2.6rem;gap:8px;align-items:center;font-size:.84rem;padding:3px 0}
+.sbar .tr{height:8px;background:var(--bg);border-radius:4px;overflow:hidden;border:1px solid var(--line)}
+.sbar .tr i{display:block;height:100%;border-radius:4px}
+.sbar b{font-family:var(--mono);text-align:right}
+.rt{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:4px 22px}
+.rt .mini .v.g{color:var(--up)}.rt .mini .v.b{color:var(--down)}.rt .mini .v.m{color:var(--amber)}
+.chk-l{display:flex;gap:8px;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--line);font-size:.84rem}
+.chk-l .ic2{width:1.2rem;text-align:center;font-weight:800}
+.chk-l .d{margin-left:auto;font-family:var(--mono);color:var(--muted);font-size:.78rem;white-space:nowrap}
+.rec-bar{display:flex;height:12px;border-radius:3px;overflow:hidden;background:var(--bg)}
+.rec-bar i{display:block;height:100%}
+.as-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:8px;align-items:end}
+.as-grid .in{width:100%}
+.svgw{width:100%;display:block}
+
 /* ── portfolio / tools ── */
 .app-t{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;gap:12px;align-items:center;min-width:0}
 .app-t .ic{width:2.6rem;height:2.6rem;border-radius:10px;display:grid;place-items:center;font-weight:800;font-family:var(--mono);font-size:1.1rem;flex-shrink:0;color:#fff}
@@ -363,6 +398,9 @@ kbd{font-family:var(--mono);font-size:.72rem;background:var(--bg);border:1px sol
   .g2,.g3,.g4,.g6,.mk-bottom{grid-template-columns:minmax(0,1fr)}
   .news-cols{--cols:1!important}
   .tb .hide-m{display:none}
+  .ff{--ffl:7.5rem;--ffv:4.6rem}
+  .ff-r .vv span{display:none}
+  .ff-r .l1 .badge{display:none}
   .modal-b{padding:10px}
 }
 </style>
@@ -393,6 +431,7 @@ kbd{font-family:var(--mono);font-size:.72rem;background:var(--bg);border:1px sol
   <nav id="nav"></nav>
   <main id="main">
     <section class="page" id="page-market"></section>
+    <section class="page" id="page-stock"></section>
     <section class="page" id="page-calendar"></section>
     <section class="page" id="page-news"></section>
     <section class="page" id="page-analytics"></section>
@@ -1239,6 +1278,7 @@ const Tape = {
 /* ───────── command line ───────── */
 const CMDS = [
   { k: ['TRH', 'MKT', 'HOME'], d: 'Přehled trhů (graf, watchlisty)', go: ['market'] },
+  { k: ['FA', 'AKCIE', 'EQRV', 'VAL'], d: 'Analýza akcie – férová cena, ukazatele, skóre', go: ['stock'] },
   { k: ['CAL', 'ECO', 'KAL'], d: 'Ekonomický kalendář – nadcházející', go: ['calendar', 'up'] },
   { k: ['HIST'], d: 'Kalendář – historie (forecast vs. actual)', go: ['calendar', 'hist'] },
   { k: ['CB', 'WIRP', 'RATES'], d: 'Centrální banky – sazby a zasedání', go: ['calendar', 'cb'] },
@@ -1267,7 +1307,7 @@ const CMDS = [
   { k: ['FULL', 'FS'], d: 'Celá obrazovka', fn: () => toggleFull() },
   { k: ['REFRESH', 'R'], d: 'Obnovit všechna data', fn: () => refreshAll() },
 ];
-const FUNCS = { DES: 'Detail instrumentu', Q: 'Detail instrumentu', GP: 'Graf (nativní)', N: 'Zprávy k instrumentu', ALRT: 'Vytvořit alert', WL: 'Přidat do watchlistu', PORT: 'Přidat do portfolia', TV: 'Otevřít na TradingView' };
+const FUNCS = { FA: 'Analýza akcie – férová cena a ukazatele', DES: 'Detail instrumentu', Q: 'Detail instrumentu', GP: 'Graf (nativní)', N: 'Zprávy k instrumentu', ALRT: 'Vytvořit alert', WL: 'Přidat do watchlistu', PORT: 'Přidat do portfolia', TV: 'Otevřít na TradingView' };
 const Cmd = {
   sel: 0, items: [],
   init() {
@@ -1343,6 +1383,13 @@ const Cmd = {
     if (fn === 'WL') { addToWatchlist(sym.y); return; }
     if (fn === 'PORT') { go('portfolio', 'positions'); setTimeout(() => Pages.portfolio.editPosition(null, sym.y), 80); return; }
     if (fn === 'TV') { window.open('https://www.tradingview.com/symbols/' + encodeURIComponent(sym.tv.replace(':', '-')) + '/', '_blank', 'noopener'); return; }
+    if ((fn === 'FA' || fn === 'EQRV' || fn === 'VAL') && sym.y) return go('stock', sym.y);
+    // a plain stock symbol opens the stock analyzer, anything else the chart
+    if (!fn && sym.y && sym.c === 'eq') return go('stock', sym.y);
+    if (!fn && sym.y && !sym.c && Store.server) {
+      API.get('api/quotes?s=' + encodeURIComponent(sym.y), 6000).then(r => { const q = r[sym.y]; if (q && q.type === 'EQUITY') go('stock', sym.y); else showChart(sym); }).catch(() => showChart(sym));
+      return;
+    }
     showChart(sym);
   },
 };
@@ -1368,6 +1415,7 @@ const App = { page: null, lastInput: Date.now() };
 const Pages = {};
 const NAV = [
   ['market', 'Trh', '<path d="M3 17l5-5 4 3 8-9"/><path d="M3 21h18"/>'],
+  ['stock', 'Akcie', '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/><path d="M8 13l2-2 2 1.5 2.5-3.5"/>'],
   ['calendar', 'Kalendář', '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'],
   ['news', 'Zprávy', '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/>'],
   ['analytics', 'Analýza', '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="5" rx="1"/><rect x="13" y="10" width="8" height="11" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/>'],
@@ -2314,6 +2362,7 @@ Pages.portfolio = {
       else if (a === 'del') items.splice(i, 1);
       else if (a === 'alert') { this.tabs.set('alerts'); return this.prefillAlert(items[i].symbol); }
       else if (a === 'chart') return showChart(resolveSym(items[i].symbol));
+      else if (a === 'fa') return go('stock', items[i].symbol);
       else if (a === 'note') { const n = prompt('Poznámka k ' + items[i].symbol, items[i].note || ''); if (n === null) return; items[i].note = n; }
       Store.set('watchlist'); this.renderWatch();
     });
@@ -2500,7 +2549,7 @@ Pages.portfolio = {
     Q.sub('pf', items.map(i => i.symbol));
     $('#wl-table').innerHTML = items.length ? `<table class="t"><thead><tr><th>Symbol</th><th>Cena</th><th>Změna</th><th>%</th><th>Denní rozpětí</th><th class="c">52 týdnů</th><th>Objem</th><th class="l">Stav</th><th>1D</th><th class="l">Poznámka</th><th></th></tr></thead><tbody>${items.map((it, i) => {
       const y = it.symbol;
-      return `<tr class="click" data-i="${i}"><td><span class="sym">${esc(byY[y] ? byY[y].l : y)}</span><span class="nm">${qc(y, 'name')}</span></td><td>${qc(y)}</td><td>${qc(y, 'chg')}</td><td>${qc(y, 'pct')}</td><td class="dim">${qc(y, 'range')}</td><td class="c"><span class="bar52" data-q="${esc(y)}" data-f="bar52"></span></td><td>${qc(y, 'vol')}</td><td class="l dim" style="font-family:var(--sans);font-size:.78rem">${qc(y, 'state')}</td><td data-sp="${esc(y)}"></td><td class="l tdn" style="font-size:.8rem;max-width:12rem" data-act="note" title="Klikněte pro úpravu">${esc(it.note || '✎')}</td><td class="nowrap"><button class="btn sm ghost" data-act="chart" title="Graf">📈</button><button class="btn sm ghost" data-act="alert" title="Alert">🔔</button><button class="btn sm ghost" data-act="up">▲</button><button class="btn sm ghost" data-act="down">▼</button><button class="btn sm ghost danger" data-act="del">✕</button></td></tr>`;
+      return `<tr class="click" data-i="${i}"><td><span class="sym">${esc(byY[y] ? byY[y].l : y)}</span><span class="nm">${qc(y, 'name')}</span></td><td>${qc(y)}</td><td>${qc(y, 'chg')}</td><td>${qc(y, 'pct')}</td><td class="dim">${qc(y, 'range')}</td><td class="c"><span class="bar52" data-q="${esc(y)}" data-f="bar52"></span></td><td>${qc(y, 'vol')}</td><td class="l dim" style="font-family:var(--sans);font-size:.78rem">${qc(y, 'state')}</td><td data-sp="${esc(y)}"></td><td class="l tdn" style="font-size:.8rem;max-width:12rem" data-act="note" title="Klikněte pro úpravu">${esc(it.note || '✎')}</td><td class="nowrap"><button class="btn sm ghost" data-act="fa" title="Analýza akcie (FA)">FA</button><button class="btn sm ghost" data-act="chart" title="Graf">📈</button><button class="btn sm ghost" data-act="alert" title="Alert">🔔</button><button class="btn sm ghost" data-act="up">▲</button><button class="btn sm ghost" data-act="down">▼</button><button class="btn sm ghost danger" data-act="del">✕</button></td></tr>`;
     }).join('')}</tbody></table>` : '<div class="empty">Watchlist je prázdný – přidejte symbol nahoře.</div>';
     paintQuotes();
     loadSparks(items.map(i => i.symbol), $('#wl-table'));
@@ -2749,15 +2798,545 @@ Pages.tools = {
   },
 };
 
+/* ═════════════════════════ PAGE: STOCK ANALYZER (FA) ═════════════════════════ */
+const fp = (v, d = 1) => (isNum(v) ? F.n(v * 100, d) + ' %' : '—');
+const fps = (v, d = 1) => (isNum(v) ? F.pct(v * 100, d) : '—');
+const fx2 = (v, d = 2) => (isNum(v) ? F.n(v, d) : '—');
+const median = a => { const s = a.filter(isNum).sort((x, y) => x - y); if (!s.length) return null; const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const quant = (a, q) => { const s = a.filter(isNum).sort((x, y) => x - y); if (!s.length) return null; const i = (s.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i); return s[lo] + (s[hi] - s[lo]) * (i - lo); };
+const cagr = (a, b, n) => (isNum(a) && isNum(b) && a > 0 && b > 0 && n > 0 ? Math.pow(b / a, 1 / n) - 1 : null);
+const lin = (v, a, b) => (isNum(v) ? clamp((v - a) / (b - a), 0, 1) * 100 : null);
+const avgN = a => { const s = a.filter(isNum); return s.length ? s.reduce((x, y) => x + y, 0) / s.length : null; };
+const scoreColor = v => (!isNum(v) ? 'var(--dim)' : v >= 70 ? UPC : v >= 45 ? '#f0a92e' : DNC);
+const CRP = { CZK: 0.8, PLN: 1.0, HUF: 1.6, TRY: 4, BRL: 3, MXN: 2, INR: 2, ZAR: 3, CNY: 1, HKD: 0.5 };
+const REC_L = { strong_buy: 'Silně koupit', buy: 'Koupit', hold: 'Držet', underperform: 'Podvážit', sell: 'Prodat', strong_sell: 'Silně prodat', none: '—' };
+
+const FA = {
+  base(d) {
+    const fx = d.fx || 1, P = d.price, st = d.stats, fi = d.fin;
+    const A = d.annual || [], last = A[A.length - 1] || {}, prev = A[A.length - 2] || {}, T = d.ttm || {}, TP = d.ttmPrev || {};
+    const mcap = d.marketCap || (st.shares && P ? st.shares * P : null);
+    const sh = mcap && P ? mcap / P : st.shares;
+    const flow = k => (isNum(T[k]) ? T[k] : last[k]);
+    const same = d.finCur === d.currency;
+    const ps = v => (isNum(v) && sh ? (v * fx) / sh : null);
+    const rev = flow('revenue') ?? fi.revenue, ni = flow('netIncome'), ebit = flow('ebit') ?? flow('opIncome'), ebitda = flow('ebitda') ?? fi.ebitda;
+    const fcfOf = a => (isNum(a.fcf) ? a.fcf : isNum(a.ocf) && isNum(a.capex) ? a.ocf + a.capex : null);
+    const fcf = fcfOf(T) ?? fi.fcf ?? fcfOf(last);
+    const fcfHist = A.map(fcfOf);
+    const cash = fi.cash ?? last.cashSti ?? last.cash ?? 0, debt = fi.debt ?? last.debt ?? 0;
+    const eps = same && isNum(st.trailingEps) ? st.trailingEps : ps(ni);
+    const bvps = ps(last.equity) ?? (same ? st.bookValue : null);
+    const fin = /financial/i.test(d.profile.sector || '') || /bank|insurance|capital markets|credit services/i.test(d.profile.industry || '');
+    const taxRate = clamp(isNum(T.taxRate) ? T.taxRate : isNum(last.taxRate) ? last.taxRate : 0.21, 0, 0.4);
+    const tr = p => (d.trend || []).find(x => x.period === p);
+    const i0 = Math.max(0, A.length - 4), yrs = A.length - 1 - i0;
+    const gRev = cagr(A[i0] && A[i0].revenue, last.revenue, yrs), gEps = cagr(A[i0] && A[i0].eps, last.eps, yrs), gFcf = cagr(fcfHist[i0], fcfHist[A.length - 1], yrs);
+    const gEst = tr('+1y') && isNum(tr('+1y').growth) ? tr('+1y').growth : null, gEst0 = tr('0y') && isNum(tr('0y').growth) ? tr('0y').growth : null;
+    const gDefault = clamp(median([gEst, gRev, gEps, gEst0].filter(isNum)) ?? 0.05, -0.05, 0.25);
+    return { fx, P, mcap, sh, rev, ni, ebit, ebitda, fcf, fcfAvg3: avgN(fcfHist.slice(-3)), fcfHist, cash, debt, eps, epsFwd: isNum(st.forwardEps) ? st.forwardEps : null, bvps, dps: st.dividendRate || 0, fin, taxRate, last, prev, T, TP, A, gRev, gEps, gFcf, gEst, gEst0, gDefault, ps, yrs };
+  },
+  SECTOR_BETA: { Utilities: 0.6, 'Consumer Defensive': 0.7, 'Real Estate': 0.8, Healthcare: 0.85, 'Communication Services': 1.0, Industrials: 1.0, 'Basic Materials': 1.05, Energy: 1.1, 'Financial Services': 1.1, 'Consumer Cyclical': 1.2, Technology: 1.2 },
+  betaOf(d) { const b = d.stats.beta; return isNum(b) && b >= 0.2 && b <= 3.5 ? b : this.SECTOR_BETA[d.profile.sector] || 1; },
+  defaults(d, b) {
+    const beta = this.betaOf(d);
+    return { g: +(b.gDefault * 100).toFixed(1), gT: 2.5, years: 5, rf: +(d.rf.rate || 4).toFixed(2), erp: 5, crp: CRP[d.currency] || 0, beta: +clamp(0.67 * beta + 0.33, 0.6, 2).toFixed(2), rOverride: null, fcfBase: isNum(b.fcf) && b.fcf > 0 ? 'ttm' : 'avg3', mos: 25 };
+  },
+  rate(a) { return Math.max(a.gT / 100 + 0.02, a.rOverride != null ? a.rOverride / 100 : (a.rf + a.beta * a.erp + a.crp) / 100); },
+  dcf(fcf0, g, gT, r, years = 5, total = 10) {
+    if (!isNum(fcf0) || fcf0 <= 0 || r <= gT) return null;
+    let f = fcf0, pv = 0;
+    const rows = [];
+    for (let t = 1; t <= total; t++) {
+      const gt = t <= years ? g : g + (gT - g) * ((t - years) / (total - years));
+      f *= 1 + gt;
+      const dv = f / Math.pow(1 + r, t);
+      pv += dv;
+      rows.push({ t, g: gt, fcf: f, pv: dv });
+    }
+    const tv = (f * (1 + gT)) / (r - gT), pvTv = tv / Math.pow(1 + r, total);
+    return { value: pv + pvTv, pv, pvTv, tv, rows };
+  },
+  fcf0(b, a) { return a.fcfBase === 'avg3' ? b.fcfAvg3 : b.fcf; },
+  models(d, b, a, peerQ) {
+    const r = this.rate(a), g = a.g / 100, gT = a.gT / 100, out = [];
+    const pos = v => (isNum(v) && v > 0 ? v : null);
+    const add = (id, name, v, lo, hi, note, extra = {}) => out.push({ id, name, v: pos(v), lo: pos(lo), hi: pos(hi), note, ...extra });
+    const fcf0 = this.fcf0(b, a), cur = d.currency;
+    if (!b.fin) {
+      const dv = (gg, rr) => { const x = this.dcf(fcf0, gg, gT, rr, a.years); return x && b.sh ? (x.value * b.fx) / b.sh : null; };
+      const base = this.dcf(fcf0, g, gT, r, a.years);
+      add('dcf', 'DCF – diskontované volné CF', base && b.sh ? (base.value * b.fx) / b.sh : null, dv(g - 0.03, r + 0.01), dv(g + 0.03, Math.max(gT + 0.015, r - 0.01)),
+        isNum(fcf0) && fcf0 > 0 ? `FCF ${F.big(fcf0 * b.fx)} ${cur}, růst ${F.n(a.g, 1)} % → ${F.n(a.gT, 1)} %, diskont ${F.n(r * 100, 2)} %` : 'záporné nebo chybějící volné cash flow', { dcf: base });
+    } else add('dcf', 'DCF – diskontované volné CF', null, null, null, 'nevhodné pro banky a pojišťovny');
+    const aaa = d.aaa || 5.5, gp = clamp(a.g, 0, 15);
+    const gf = gg => (b.eps > 0 ? (b.eps * (8.5 + 2 * clamp(gg, 0, 15)) * 4.4) / aaa : null);
+    add('graham', 'Grahamův vzorec (revidovaný)', gf(gp), gf(gp - 3), gf(gp + 3), b.eps > 0 ? `EPS ${F.p(b.eps)} × (8,5 + 2 × ${F.n(gp, 1)}) × 4,4 / AAA ${F.n(aaa, 2)} %` : 'záporný zisk');
+    add('gnum', 'Grahamovo číslo', b.eps > 0 && b.bvps > 0 ? Math.sqrt(22.5 * b.eps * b.bvps) : null, null, null, b.eps > 0 && b.bvps > 0 ? `√(22,5 × EPS ${F.p(b.eps)} × BVPS ${F.p(b.bvps)}) – konzervativní strop pro defenzivního investora` : 'záporný zisk nebo vlastní kapitál', { info: true });
+    const dy = b.P ? (b.dps / b.P) * 100 : 0;
+    const ly = gg => (b.eps > 0 && gg > 0 ? b.eps * (clamp(gg, 0, 25) + dy) : null);
+    add('lynch', 'Peter Lynch (férové P/E = růst)', ly(a.g), ly(a.g - 3), ly(a.g + 3), b.eps > 0 && a.g > 0 ? `P/E ${F.n(clamp(a.g, 0, 25) + dy, 1)} = růst ${F.n(clamp(a.g, 0, 25), 1)} + div. výnos ${F.n(dy, 1)}${a.g < 5 ? ' – pro pomalu rostoucí firmy jen informativně' : ''}` : 'vyžaduje kladný zisk i růst', { info: a.g < 5 });
+    if (b.dps > 0) {
+      const gd = clamp(Math.min(g, 0.06), 0, r - 0.01);
+      const ddm = (gg, rr) => (rr > gg + 0.005 ? (b.dps * (1 + gg)) / (rr - gg) : null);
+      const payout = b.eps > 0 ? b.dps / b.eps : 1, core = payout >= 0.4 || b.fin || /utilities|real estate/i.test(d.profile.sector || '');
+      add('ddm', 'Dividendový model (Gordon)', ddm(gd, r), ddm(Math.max(0, gd - 0.01), r + 0.01), ddm(gd + 0.01, Math.max(gd + 0.02, r - 0.01)), `dividenda ${F.p(b.dps)} ${cur}, růst ${F.n(gd * 100, 1)} % ročně${core ? '' : ` – výplatní poměr jen ${F.n(payout * 100, 0)} %, proto jen informativně`}`, { info: !core });
+    } else add('ddm', 'Dividendový model (Gordon)', null, null, null, 'nevyplácí dividendu');
+    if (!b.fin && b.ebit > 0 && b.sh) {
+      const epv = rr => (((b.ebit * (1 - b.taxRate)) / rr + b.cash - b.debt) * b.fx) / b.sh;
+      add('epv', 'Earnings Power Value (bez růstu)', epv(r), epv(r + 0.01), epv(Math.max(0.03, r - 0.01)), `NOPAT ${F.big(b.ebit * (1 - b.taxRate) * b.fx)} / ${F.n(r * 100, 2)} % + čistá hotovost – hodnota současných zisků bez růstu (spodní hranice)`, { info: true });
+    } else add('epv', 'Earnings Power Value (bez růstu)', null, null, null, b.fin ? 'nevhodné pro finanční sektor' : 'záporný provozní zisk');
+    if (b.fin) {
+      const avgE = avgN([b.last.equity, b.prev.equity]);
+      const roe = isNum(b.ni) && avgE > 0 ? b.ni / avgE : d.fin.roe, gl = Math.min(g, 0.04);
+      const pbroe = rr => (roe > 0 && rr > gl + 0.005 && b.bvps > 0 ? b.bvps * ((roe - gl) / (rr - gl)) : null);
+      add('pbroe', 'P/B – ROE (excess return, banky)', pbroe(r), pbroe(r + 0.01), pbroe(Math.max(gl + 0.015, r - 0.01)), `ROE ${fp(roe)}, BVPS ${F.p(b.bvps)}, férové P/B ${roe > 0 ? F.n((roe - gl) / (r - gl), 2) : '—'}`);
+    }
+    if (peerQ && peerQ.length) {
+      const useF = isNum(b.epsFwd) && b.epsFwd > 0;
+      const pes = peerQ.map(q => (useF ? q.fpe : q.pe)).filter(v => isNum(v) && v > 0 && v < 150);
+      const e = useF ? b.epsFwd : b.eps;
+      if (pes.length >= 2 && e > 0) add('peers', `Konkurence – medián ${useF ? 'forward ' : ''}P/E`, e * median(pes), e * quant(pes, 0.25), e * quant(pes, 0.75), `P/E ${F.n(median(pes), 1)} (${pes.length} firem) × EPS ${F.p(e)}`);
+    }
+    if (isNum(d.fin.targetMean)) add('analyst', `Cílová cena analytiků`, d.fin.targetMedian ?? d.fin.targetMean, d.fin.targetLow, d.fin.targetHigh, `${d.fin.analysts || '?'} analytiků · průměr ${F.p(d.fin.targetMean)} · rozpětí ${F.p(d.fin.targetLow)} – ${F.p(d.fin.targetHigh)}`, { analyst: true });
+    return out;
+  },
+  fair(models, P) {
+    let intr = models.filter(m => !m.analyst && !m.info && isNum(m.v));
+    if (!intr.length) intr = models.filter(m => !m.analyst && isNum(m.v));
+    const fv = median(intr.map(m => m.v));
+    return { fv, n: intr.length, min: intr.length ? Math.min(...intr.map(m => m.v)) : null, max: intr.length ? Math.max(...intr.map(m => m.v)) : null, up: isNum(fv) && P ? fv / P - 1 : null };
+  },
+  verdict(up) {
+    if (!isNum(up)) return ['v0', 'nelze určit'];
+    return up > 0.2 ? ['v2', 'Podhodnocená'] : up > 0.05 ? ['v1', 'Mírně podhodnocená'] : up >= -0.05 ? ['v0', 'Férově oceněná'] : up >= -0.2 ? ['v-1', 'Mírně nadhodnocená'] : ['v-2', 'Nadhodnocená'];
+  },
+  reverseDcf(b, a) {
+    const r = this.rate(a), gT = a.gT / 100, fcf0 = this.fcf0(b, a);
+    if (b.fin || !isNum(fcf0) || fcf0 <= 0 || !b.sh || !b.P) return null;
+    const target = (b.P * b.sh) / b.fx;
+    const f = gg => { const x = this.dcf(fcf0, gg, gT, r, a.years); return x ? x.value : 0; };
+    let lo = -0.5, hi = 1.5;
+    if (f(hi) < target) return { above: true };
+    if (f(lo) > target) return { below: true };
+    for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (f(m) < target) lo = m; else hi = m; }
+    return { g: (lo + hi) / 2 };
+  },
+  ratios(d, b) {
+    const { fx, P, mcap, last, prev, T, TP } = b, R = {};
+    const flow = k => (isNum(T[k]) ? T[k] : last[k]);
+    const ev = isNum(mcap) ? mcap + (b.debt - b.cash) * fx : d.stats.ev;
+    R.ev = ev;
+    R.pe = b.eps > 0 ? P / b.eps : null;
+    R.fpe = b.epsFwd > 0 ? P / b.epsFwd : null;
+    R.peg = R.pe && isNum(b.gEst) && b.gEst > 0 ? R.pe / (b.gEst * 100) : d.stats.peg;
+    R.pb = b.bvps > 0 ? P / b.bvps : null;
+    R.ps = mcap && b.rev > 0 ? mcap / (b.rev * fx) : null;
+    R.pfcf = mcap && b.fcf > 0 ? mcap / (b.fcf * fx) : null;
+    R.evEbitda = ev && b.ebitda > 0 ? ev / (b.ebitda * fx) : null;
+    R.evEbit = ev && b.ebit > 0 ? ev / (b.ebit * fx) : null;
+    R.evSales = ev && b.rev > 0 ? ev / (b.rev * fx) : null;
+    R.ey = b.eps && P ? b.eps / P : null;
+    R.fcfy = mcap && isNum(b.fcf) ? (b.fcf * fx) / mcap : null;
+    R.dy = P ? b.dps / P : null;
+    const bb = flow('buybacks');
+    R.bby = mcap && isNum(bb) ? (-bb * fx) / mcap : null;
+    R.shy = (R.dy || 0) + (R.bby || 0);
+    const rev = b.rev, gp = flow('grossProfit'), op = flow('opIncome');
+    R.gm = rev && isNum(gp) ? gp / rev : d.fin.grossMargin;
+    R.om = rev && isNum(op) ? op / rev : d.fin.opMargin;
+    R.nm = rev && isNum(b.ni) ? b.ni / rev : d.fin.netMargin;
+    R.ebitdam = rev && isNum(b.ebitda) ? b.ebitda / rev : d.fin.ebitdaMargin;
+    R.fcfm = rev && isNum(b.fcf) ? b.fcf / rev : null;
+    R.rndr = rev && isNum(flow('rnd')) ? flow('rnd') / rev : null;
+    R.sbcr = rev && isNum(flow('sbc')) ? flow('sbc') / rev : null;
+    const avgE = avgN([last.equity, prev.equity]), avgA = avgN([last.assets, prev.assets]);
+    R.roe = isNum(b.ni) && avgE > 0 ? b.ni / avgE : d.fin.roe;
+    R.roa = isNum(b.ni) && avgA ? b.ni / avgA : d.fin.roa;
+    const ic = isNum(last.investedCapital) ? last.investedCapital : (last.equity || 0) + (last.debt || 0) - (last.cash || 0);
+    R.roic = isNum(b.ebit) && ic > 0 && !b.fin ? (b.ebit * (1 - b.taxRate)) / ic : null;
+    R.roce = isNum(b.ebit) && last.assets && isNum(last.curLiab) && !b.fin ? b.ebit / (last.assets - last.curLiab) : null;
+    R.revYoY = isNum(T.revenue) && TP.revenue > 0 ? T.revenue / TP.revenue - 1 : d.fin.revenueGrowth;
+    R.niYoY = isNum(T.netIncome) && TP.netIncome > 0 ? T.netIncome / TP.netIncome - 1 : d.fin.earningsGrowth;
+    R.revCagr = b.gRev; R.epsCagr = b.gEps; R.fcfCagr = b.gFcf; R.gEst = b.gEst; R.gEst0 = b.gEst0;
+    R.de = last.equity > 0 ? b.debt / last.equity : null;
+    R.ndEbitda = b.ebitda > 0 ? (b.debt - b.cash) / b.ebitda : null;
+    R.cr = last.curLiab ? last.curAssets / last.curLiab : d.fin.currentRatio;
+    R.qr = d.fin.quickRatio;
+    const intr = flow('interest');
+    R.ic = isNum(b.ebit) && intr > 0 && !b.fin ? b.ebit / intr : null;
+    R.eqr = last.assets ? last.equity / last.assets : null;
+    R.cashPs = b.ps(b.cash);
+    R.netCash = (b.cash - b.debt) * fx;
+    const div = isNum(flow('dividends')) ? -flow('dividends') : null;
+    R.payout = isNum(div) && b.ni > 0 ? div / b.ni : d.stats.payoutRatio != null ? d.stats.payoutRatio / 100 : null;
+    R.fcfPayout = isNum(div) && b.fcf > 0 ? div / b.fcf : null;
+    const shN = last.shares ?? last.dilShares, shP = prev.shares ?? prev.dilShares;
+    R.shChg = shN && shP ? shN / shP - 1 : null;
+    R.at = avgA && rev ? rev / avgA : null;
+    const cogs = flow('cogs');
+    R.it = isNum(cogs) && last.inventory > 0 ? cogs / last.inventory : null;
+    return R;
+  },
+  piotroski(b) {
+    const A = b.A, c = b.last, p = b.prev, pp = A[A.length - 3] || {};
+    if (A.length < 2 || !c.assets || !p.assets) return null;
+    const roa = (x, base) => (isNum(x.netIncome) && base ? x.netIncome / base : null);
+    const roaC = roa(c, p.assets), roaP = roa(p, pp.assets || p.assets);
+    const lev = x => (x.assets ? (x.ltDebt ?? x.debt ?? 0) / x.assets : null);
+    const crr = x => (x.curLiab && isNum(x.curAssets) ? x.curAssets / x.curLiab : null);
+    const gm = x => (x.revenue && isNum(x.grossProfit) ? x.grossProfit / x.revenue : null);
+    const at = (x, base) => (x.revenue && base ? x.revenue / base : null);
+    const shC = c.shares ?? c.dilShares, shP = p.shares ?? p.dilShares;
+    const it = (ok, label, detail) => ({ ok, label, detail });
+    const both = (x, y) => isNum(x) && isNum(y);
+    const items = [
+      it(isNum(roaC) ? roaC > 0 : null, 'Kladná rentabilita aktiv (ROA)', fp(roaC)),
+      it(isNum(c.ocf) ? c.ocf > 0 : null, 'Kladný provozní cash flow', F.big(c.ocf)),
+      it(both(roaC, roaP) ? roaC > roaP : null, 'ROA meziročně roste', `${fp(roaP)} → ${fp(roaC)}`),
+      it(both(c.ocf, c.netIncome) ? c.ocf > c.netIncome : null, 'Provozní CF > čistý zisk (kvalita zisku)', `${F.big(c.ocf)} vs ${F.big(c.netIncome)}`),
+      it(both(lev(c), lev(p)) ? lev(c) <= lev(p) : null, 'Nerostoucí zadlužení (dlouh. dluh / aktiva)', `${fp(lev(p))} → ${fp(lev(c))}`),
+      it(both(crr(c), crr(p)) ? crr(c) > crr(p) : null, 'Roste běžná likvidita', `${fx2(crr(p))} → ${fx2(crr(c))}`),
+      it(shC && shP ? shC <= shP * 1.005 : null, 'Žádné ředění akcionářů', shC && shP ? fps(shC / shP - 1) : '—'),
+      it(both(gm(c), gm(p)) ? gm(c) > gm(p) : null, 'Roste hrubá marže', `${fp(gm(p))} → ${fp(gm(c))}`),
+      it(both(at(c, p.assets), at(p, pp.assets || p.assets)) ? at(c, p.assets) > at(p, pp.assets || p.assets) : null, 'Roste obrat aktiv', `${fx2(at(p, pp.assets || p.assets))} → ${fx2(at(c, p.assets))}`),
+    ];
+    const known = items.filter(i => i.ok !== null);
+    return { score: known.filter(i => i.ok).length, max: known.length, items };
+  },
+  altman(b) {
+    const c = b.last;
+    if (b.fin || !c.assets) return null;
+    const wc = isNum(c.workingCapital) ? c.workingCapital : isNum(c.curAssets) && isNum(c.curLiab) ? c.curAssets - c.curLiab : null;
+    const mve = b.mcap ? b.mcap / b.fx : null, ebit = c.ebit ?? c.opIncome;
+    if (![wc, c.retained, ebit, mve, c.liab, c.revenue].every(isNum) || !c.liab) return null;
+    const p = { A: wc / c.assets, B: c.retained / c.assets, C: ebit / c.assets, D: mve / c.liab, E: c.revenue / c.assets };
+    const z = 1.2 * p.A + 1.4 * p.B + 3.3 * p.C + 0.6 * p.D + 1.0 * p.E;
+    return { z, zone: z > 2.99 ? 'safe' : z > 1.81 ? 'grey' : 'distress', p };
+  },
+  scores(b, R, fair, pio, alt, t) {
+    const S = {};
+    S.val = avgN([lin(fair.up, -0.3, 0.4), R.pe ? lin(-R.pe, -40, -10) : null, R.evEbitda ? lin(-R.evEbitda, -25, -6) : null, lin(R.fcfy, 0, 0.08), R.peg > 0 ? lin(-R.peg, -3, -0.8) : null]);
+    S.qual = avgN([lin(R.roe, 0, 0.25), lin(R.roic, 0, 0.2), lin(R.nm, 0, 0.25), pio && pio.max ? (pio.score / pio.max) * 100 : null, lin(R.fcfm, 0, 0.2)]);
+    S.growth = avgN([lin(R.revCagr, -0.05, 0.2), lin(R.epsCagr, -0.05, 0.25), lin(R.gEst, -0.05, 0.2), lin(R.revYoY, -0.05, 0.2)]);
+    S.health = avgN([alt ? lin(alt.z, 1.2, 4) : null, isNum(R.ndEbitda) ? (R.ndEbitda < 0 ? 100 : lin(-R.ndEbitda, -4, 0)) : null, lin(R.cr, 0.8, 2), lin(R.ic, 1.5, 15), isNum(R.de) ? lin(-R.de, -2.5, -0.2) : null]);
+    S.div = b.dps > 0 ? avgN([lin(R.dy, 0, 0.06), isNum(R.payout) ? lin(-R.payout, -1, -0.3) : null, isNum(R.fcfPayout) ? lin(-R.fcfPayout, -1.1, -0.3) : null]) : null;
+    S.mom = t ? avgN([lin(t.perf.m6, -20, 30), lin(t.perf.y1, -30, 50), t.sma200 ? lin(t.last / t.sma200 - 1, -0.15, 0.15) : null, t.cross ? (t.cross.type === 'golden' ? 75 : 25) : null]) : null;
+    const W = { val: 25, qual: 20, growth: 15, health: 20, div: 10, mom: 10 };
+    let sw = 0, ss = 0;
+    for (const [k, w] of Object.entries(W)) if (isNum(S[k])) { sw += w; ss += S[k] * w; }
+    S.total = sw ? ss / sw : null;
+    return S;
+  },
+  techSignals(t) {
+    if (!t) return null;
+    const s = [], P = t.last;
+    const sig = (name, val, v, why) => s.push({ name, val, v, why });
+    sig('RSI (14)', F.n(t.rsi, 1), t.rsi < 30 ? 1 : t.rsi > 70 ? -1 : 0, t.rsi < 30 ? 'přeprodáno' : t.rsi > 70 ? 'překoupeno' : '');
+    sig('MACD (12, 26, 9)', F.n(t.macdHist, 3), t.macdHist > 0 ? 1 : -1, t.macdHist > 0 ? 'nad signální linií' : 'pod signální linií');
+    sig('Stochastic %K (14)', F.n(t.stoch, 1), t.stoch < 20 ? 1 : t.stoch > 80 ? -1 : 0, '');
+    sig('Bollinger %B (20, 2)', F.n(t.bbPctB, 2), t.bbPctB < 0.05 ? 1 : t.bbPctB > 0.95 ? -1 : 0, '');
+    [['sma20', 'SMA 20'], ['sma50', 'SMA 50'], ['sma100', 'SMA 100'], ['sma200', 'SMA 200']].forEach(([k, n]) => { if (isNum(t[k])) sig(n, F.p(t[k]), P > t[k] ? 1 : -1, `cena ${P > t[k] ? 'nad' : 'pod'} průměrem (${F.pct((P / t[k] - 1) * 100, 1)})`); });
+    if (isNum(t.sma50) && isNum(t.sma200)) sig('SMA 50 × SMA 200', t.sma50 > t.sma200 ? 'golden cross' : 'death cross', t.sma50 > t.sma200 ? 1 : -1, t.cross ? 'od ' + F.date(t.cross.ts) : '');
+    const sc = s.reduce((a, x) => a + x.v, 0) / s.length;
+    return { list: s, score: sc, label: sc > 0.5 ? 'Silný nákup' : sc > 0.15 ? 'Nákup' : sc < -0.5 ? 'Silný prodej' : sc < -0.15 ? 'Prodej' : 'Neutrální' };
+  },
+  compute(d, a, peerQ) {
+    const b = this.base(d), models = this.models(d, b, a, peerQ), fair = this.fair(models, b.P), R = this.ratios(d, b);
+    const pio = this.piotroski(b), alt = this.altman(b), S = this.scores(b, R, fair, pio, alt, d.tech);
+    return { b, models, fair, R, pio, alt, S, rev: this.reverseDcf(b, a) };
+  },
+};
+
+function radar(axes, size = 220) {
+  const n = axes.length, c = size / 2, R = size * 0.34;
+  const pt = (i, f) => { const a = -Math.PI / 2 + (i * 2 * Math.PI) / n; return [c + Math.cos(a) * R * f, c + Math.sin(a) * R * f]; };
+  const ring = f => axes.map((_, i) => pt(i, f).map(v => v.toFixed(1)).join(',')).join(' ');
+  const poly = axes.map((x, i) => pt(i, isNum(x.v) ? clamp(x.v / 100, 0.04, 1) : 0.04).map(v => v.toFixed(1)).join(',')).join(' ');
+  return `<svg class="svgw" viewBox="0 0 ${size} ${size}" style="max-width:${size}px;margin:auto">${[0.25, 0.5, 0.75, 1].map(f => `<polygon points="${ring(f)}" fill="none" stroke="#283241" stroke-width="1"/>`).join('')}
+    ${axes.map((_, i) => { const [x, y] = pt(i, 1); return `<line x1="${c}" y1="${c}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#283241"/>`; }).join('')}
+    <polygon points="${poly}" fill="rgba(41,98,255,.28)" stroke="#5c87ff" stroke-width="2"/>
+    ${axes.map((x, i) => { const [px, py] = pt(i, 1.24); return `<text x="${px.toFixed(1)}" y="${py.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="#8b97a7" font-size="10.5" font-family="sans-serif">${esc(x.l)}</text>`; }).join('')}</svg>`;
+}
+function football(models, P, fv, cur) {
+  const rows = models.filter(m => isNum(m.v) || isNum(m.lo));
+  if (!rows.length) return '<div class="empty">Žádný model nelze spočítat (chybí zisk / cash flow).</div>';
+  const vals = rows.flatMap(m => [m.v, m.lo, m.hi]).filter(isNum).concat([P, fv].filter(isNum));
+  const d0 = Math.max(0, Math.min(Math.min(...vals), P * 0.6) * 0.9), d1 = Math.min(Math.max(...vals), P * 3) * 1.05;
+  const pos = v => clamp((v - d0) / (d1 - d0), 0, 1);
+  const col = v => (v > P * 1.05 ? UPC : v < P * 0.95 ? DNC : '#f0a92e');
+  const at = p => `calc(var(--ffl) + 10px + (100% - var(--ffl) - var(--ffv) - 20px) * ${p.toFixed(4)})`;
+  const ticks = niceTicks(d0, d1, 6);
+  return `<div class="ff">${rows.map(m => {
+    const v = m.v, lo = isNum(m.lo) ? Math.min(m.lo, m.hi ?? m.lo) : null, hi = isNum(m.hi) ? Math.max(m.hi, m.lo ?? m.hi) : null;
+    const bar = isNum(lo) && isNum(hi) ? `<i class="ff-b" style="left:${(pos(lo) * 100).toFixed(2)}%;width:${Math.max(0.6, (pos(hi) - pos(lo)) * 100).toFixed(2)}%;background:${col(v ?? (lo + hi) / 2)}"></i>` : '';
+    const mk = isNum(v) ? `<i class="ff-m" style="left:${(pos(v) * 100).toFixed(2)}%;background:${col(v)}" title="${esc(m.name)}: ${F.p(v)}"></i>` : '';
+    return `<div class="ff-r" ${m.info ? 'style="opacity:.62"' : ''}><span class="l1" title="${esc(m.note || '')}">${esc(m.name)}${m.info ? ' <span class="badge" title="Konzervativní / informativní model – nezapočítává se do férové ceny">info</span>' : ''}</span><div class="ff-t">${bar}${mk}</div><span class="vv">${isNum(v) ? `${F.p(v)} <span class="${F.cls(v / P - 1)}">${F.pct((v / P - 1) * 100, 0)}</span>` : '<span class="dim">—</span>'}</span></div>`;
+  }).join('')}
+  ${ticks.map(t => `<span class="ff-ax" style="left:${at(pos(t))}">${F.n(t, t >= 100 ? 0 : 1)}</span>`).join('')}
+  <div class="ff-ln" style="left:${at(pos(P))}"><span>cena ${F.p(P)}</span></div>
+  ${isNum(fv) ? `<div class="ff-ln fv" style="left:${at(pos(fv))}"><span style="bottom:auto;top:-2px;color:var(--accent2)">férová ${F.p(fv)}</span></div>` : ''}</div>`;
+}
+function gbars(labels, series, h = 190, width = 640) {
+  const W = Math.max(300, Math.round(width)), H = h, pl = 6, pr = 6, pt = 10, pb = 34;
+  const all = series.flatMap(s => s.data).filter(isNum), mx = Math.max(0, ...all), mn = Math.min(0, ...all);
+  const Y = v => pt + ((mx - v) / (mx - mn || 1)) * (H - pt - pb);
+  const gw = (W - pl - pr) / Math.max(1, labels.length), bw = Math.min(30, (gw * 0.78) / series.length);
+  const bars = labels.map((l, i) => series.map((s, j) => { const v = s.data[i]; if (!isNum(v)) return ''; const x = pl + gw * i + (gw - bw * series.length) / 2 + j * bw, y0 = Y(0), y1 = Y(v); return `<rect x="${x.toFixed(1)}" y="${Math.min(y0, y1).toFixed(1)}" width="${(bw - 2).toFixed(1)}" height="${Math.max(1, Math.abs(y1 - y0)).toFixed(1)}" fill="${s.color}" rx="1.5"><title>${esc(s.name)} ${esc(l)}: ${F.big(v)}</title></rect>`; }).join('') + `<text x="${(pl + gw * i + gw / 2).toFixed(1)}" y="${H - 18}" text-anchor="middle" fill="#8b97a7" font-size="11" font-family="monospace">${esc(l)}</text>`).join('');
+  const leg = series.map((s, j) => `<rect x="${pl + j * 120}" y="${H - 9}" width="9" height="9" fill="${s.color}" rx="1"/><text x="${pl + j * 120 + 13}" y="${H - 1}" fill="#8b97a7" font-size="11" font-family="sans-serif">${esc(s.name)}</text>`).join('');
+  return `<svg class="svgw" viewBox="0 0 ${W} ${H}" style="height:${h}px;max-width:${W}px"><line x1="${pl}" x2="${W - pr}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="#3a4554"/>${bars}${leg}</svg>`;
+}
+function fvCardHtml(d, c, a) {
+  const { fair, b, rev } = c, [vc, vl] = FA.verdict(fair.up), cur = esc(d.currency);
+  if (!isNum(fair.fv)) return '<div class="empty">Férovou cenu nelze spočítat – firma nemá kladný zisk ani cash flow a nevyplácí dividendu.</div>';
+  return `<div class="fa-big ${F.cls(fair.up)}">${F.p(fair.fv)} <span class="dim" style="font-size:1rem">${cur}</span></div>
+    <div class="row" style="margin:6px 0 10px"><span class="verdict ${vc}">${vl}</span><span class="mono ${F.cls(fair.up)}">${F.pct(fair.up * 100, 1)}</span><span class="note">vs. cena ${F.p(b.P)}</span></div>
+    <div class="mini"><span class="k">Nákupní cena (bezpečnostní marže ${F.n(a.mos, 0)} %)</span><span class="v">${F.p(fair.fv * (1 - a.mos / 100))}</span></div>
+    <div class="mini"><span class="k">Rozpětí modelů (${fair.n})</span><span class="v">${F.p(fair.min)} – ${F.p(fair.max)}</span></div>
+    ${isNum(d.fin.targetMedian ?? d.fin.targetMean) ? `<div class="mini"><span class="k">Cíl analytiků (medián)</span><span class="v">${F.p(d.fin.targetMedian ?? d.fin.targetMean)} <span class="${F.cls((d.fin.targetMedian ?? d.fin.targetMean) / b.P - 1)}">${F.pct(((d.fin.targetMedian ?? d.fin.targetMean) / b.P - 1) * 100, 0)}</span></span></div>` : ''}
+    ${rev ? `<div class="mini"><span class="k">Reverzní DCF – cena implikuje růst FCF</span><span class="v">${rev.g != null ? `<b class="${rev.g > 0.15 ? 'dn' : rev.g < 0.05 ? 'up' : 'amber'}">${F.n(rev.g * 100, 1)} %</b> ročně` : rev.above ? '> 150 % ročně' : 'pokles'}</span></div>` : ''}
+    <p class="note" style="margin-top:8px">Férová cena = medián hlavních modelů (DCF, Graham, Lynch, konkurence, u dividendových firem DDM, u bank P/B–ROE); konzervativní modely jsou jen informativní. Výchozí diskont ${F.n(FA.rate(a) * 100, 2)} % (${esc(d.rf.name)} ${F.n(a.rf, 2)} % + β ${F.n(a.beta, 2)} × ${F.n(a.erp, 1)} %${a.crp ? ' + země ' + F.n(a.crp, 1) + ' %' : ''}). Nejde o investiční doporučení.</p>`;
+}
+function scoreHtml(S, compact) {
+  const AX = [['val', 'Valuace'], ['qual', 'Kvalita'], ['growth', 'Růst'], ['health', 'Zdraví'], ['div', 'Dividenda'], ['mom', 'Momentum']];
+  const bars = AX.map(([k, l]) => `<div class="sbar"><span>${l}</span><div class="tr"><i style="width:${isNum(S[k]) ? S[k] : 0}%;background:${scoreColor(S[k])}"></i></div><b style="color:${scoreColor(S[k])}">${isNum(S[k]) ? Math.round(S[k]) : '—'}</b></div>`).join('');
+  return `<div class="row" style="align-items:center;gap:14px;flex-wrap:nowrap">${compact ? '' : `<div style="width:46%;min-width:150px">${radar(AX.map(([k, l]) => ({ l, v: S[k] })), 220)}</div>`}
+    <div style="flex:1"><div class="row mb" style="align-items:baseline"><span class="fa-big" style="color:${scoreColor(S.total)}">${isNum(S.total) ? Math.round(S.total) : '—'}</span><span class="note">/ 100 celkové skóre</span></div>${bars}</div></div>`;
+}
+const RCLS = (v, good, bad) => { if (!isNum(v)) return ''; const hb = good > bad; return hb ? (v >= good ? 'g' : v <= bad ? 'b' : 'm') : (v <= good ? 'g' : v >= bad ? 'b' : 'm'); };
+
+Pages.stock = {
+  title: 'Akcie',
+  QUICK: ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'JPM', 'KO', 'CEZ.PR', 'KOMB.PR', 'MONET.PR'],
+  init() {
+    $('#page-stock').innerHTML = `<div class="card mb"><div class="card-b"><div class="fa-search">
+        <span class="card-t">Analýza akcie</span>
+        <div style="flex:1;min-width:15rem;max-width:30rem"><input class="in" id="fa-in" placeholder="Zadejte akcii: AAPL, Microsoft, CEZ.PR, SAP.DE…" style="width:100%"></div>
+        <button class="btn pri" id="fa-go">Analyzovat</button><span class="sp"></span><div class="chips" id="fa-quick"></div></div></div></div>
+      <div id="fa-body"></div>`;
+    const go1 = v => { const s = resolveSym(v); if (s && s.y) this.open(s.y); };
+    symPicker($('#fa-in'), s => this.open(s));
+    $('#fa-in').addEventListener('keydown', e => { if (e.key === 'Enter') go1(e.target.value); });
+    $('#fa-go').onclick = () => go1($('#fa-in').value);
+    $('#fa-quick').addEventListener('click', e => { const c = e.target.closest('.chip'); if (c) this.open(c.dataset.s); });
+    const body = $('#fa-body');
+    const onA = e => { if (e.target.dataset && e.target.dataset.as) this.onAssume(e.target); };
+    body.addEventListener('input', onA);
+    body.addEventListener('change', onA);
+    body.addEventListener('click', e => {
+      const el = e.target.closest('[data-fa]');
+      if (!el || !this.d) return;
+      const y = this.d.symbol, act = el.dataset.fa;
+      if (act === 'chart') showChart(resolveSym(y));
+      else if (act === 'des') openDES(resolveSym(y));
+      else if (act === 'wl') addToWatchlist(y);
+      else if (act === 'alert') { go('portfolio', 'alerts'); setTimeout(() => Pages.portfolio.prefillAlert(y), 80); }
+      else if (act === 'pf') { go('portfolio', 'positions'); setTimeout(() => Pages.portfolio.editPosition(null, y), 80); }
+      else if (act === 'peer') this.open(el.dataset.s);
+      else if (act === 'reset') { this.a = FA.defaults(this.d, FA.base(this.d)); this.renderAssume(); this.recalc(); }
+      else if (act === 'refresh') this.load(y);
+    });
+    this.renderQuick();
+  },
+  show(sub) {
+    const s = sub ? decodeURIComponent(sub).toUpperCase() : this.d ? this.d.symbol : (L().faRecent || [])[0];
+    if (!s) { $('#fa-body').innerHTML = '<div class="empty">Vyhledejte akcii nahoře – FinTerm spočítá férovou cenu (DCF, Graham, Lynch, dividendový model, EPV, srovnání s konkurencí, analytici), skóre kvality a všechny klíčové ukazatele.</div>'; return; }
+    if (!this.d || this.d.symbol !== s) { if (this._tok !== s) this.load(s); }
+    else { Q.sub('fa', [s]); paintQuotes(); }
+  },
+  hide() { Q.unsub('fa'); },
+  open(s) { if (s) go('stock', String(s).toUpperCase()); },
+  renderQuick() {
+    const rec = (L().faRecent || []).slice(0, 6);
+    $('#fa-quick').innerHTML = [...rec, ...this.QUICK.filter(q => !rec.includes(q))].slice(0, 14).map(s => `<span class="chip ${rec.includes(s) ? 'on' : ''}" data-s="${esc(s)}">${esc(s)}</span>`).join('');
+  },
+  async load(sym) {
+    this._tok = sym;
+    $('#fa-body').innerHTML = `<div class="loading">Načítám fundamentální data ${esc(sym)} (výkazy, odhady analytiků, technika)</div>`;
+    let d;
+    try { d = await API.get('api/fundamentals?s=' + encodeURIComponent(sym), 45000); }
+    catch (e) {
+      if (this._tok !== sym) return;
+      this._tok = null;
+      $('#fa-body').innerHTML = `<div class="empty">Nelze načíst <b>${esc(sym)}</b>: ${esc(e.message)}<br><span class="note">Použijte Yahoo symbol – např. CEZ.PR (Praha), SAP.DE (Xetra), VOD.L (Londýn), 7203.T (Tokio).</span></div>`;
+      return;
+    }
+    if (this._tok !== sym) return;
+    this._tok = null;
+    this.d = d; this.peerQ = null; this.c = null;
+    this.a = FA.defaults(d, FA.base(d));
+    const rec = (L().faRecent || []).filter(x => x !== d.symbol); rec.unshift(d.symbol); L().faRecent = rec.slice(0, 10); saveLayout(); this.renderQuick();
+    Q.set(d.symbol, { price: d.price, change: d.change, changePct: d.changePct, currency: d.currency, name: d.name, marketState: d.marketState });
+    Q.sub('fa', [d.symbol]);
+    this.render();
+    if (d.peers && d.peers.length) {
+      API.get('api/quotes?s=' + encodeURIComponent(d.peers.join(','))).then(r => {
+        if (this.d !== d) return;
+        this.peerQ = d.peers.map(s => r[s]).filter(q => q && q.type === 'EQUITY');
+        this.renderPeers(); this.recalc();
+      }).catch(() => { const el = $('#fa-peers'); if (el) el.innerHTML = '<div class="empty">Nedostupné</div>'; });
+    }
+  },
+  render() {
+    const d = this.d, p = d.profile, has = (d.annual && d.annual.length > 0) || isNum(d.stats.trailingEps);
+    const head = `<div class="card mb"><div class="card-b"><div class="fa-h">
+        <div style="flex:1;min-width:16rem"><div class="nm2">${esc(d.longName || d.name)} <span class="badge blue">${esc(d.symbol)}</span> <span class="badge">${esc(d.exchange || '')}</span></div>
+          <div class="meta">${esc([p.sector, p.industry].filter(Boolean).join(' › '))}${p.country ? ' · ' + esc(p.country) : ''}${p.employees ? ' · ' + F.n(p.employees, 0) + ' zaměstnanců' : ''}${d.finCur && d.finCur !== d.currency ? ` · výkazy v ${esc(d.finCur)}, přepočet na ${esc(d.currency)} kurzem ${F.n(d.fx, 6)}` : ''}</div>
+          <div class="row" style="margin-top:8px"><button class="btn sm" data-fa="chart">📈 Graf</button><button class="btn sm" data-fa="des">DES</button><button class="btn sm" data-fa="wl">+ Watchlist</button><button class="btn sm" data-fa="alert">🔔 Alert</button><button class="btn sm" data-fa="pf">+ Portfolio</button><a class="btn sm" href="https://finance.yahoo.com/quote/${encodeURIComponent(d.symbol)}" target="_blank" rel="noopener">Yahoo ↗</a><button class="btn sm ghost" data-fa="refresh" title="Načíst znovu">⟳</button></div></div>
+        <div style="text-align:right"><div class="px">${qc(d.symbol)} <span class="dim" style="font-size:1rem">${esc(d.currency)}</span></div><div class="mono">${qc(d.symbol, 'chg')} ${qc(d.symbol, 'pct')}</div>
+          <div class="note">tržní kapitalizace ${F.big(d.marketCap)} ${esc(d.currency)}${isNum(d.stats.beta) ? ' · beta ' + F.n(d.stats.beta, 2) : ''}${d.earnings.next ? ' · výsledky ' + F.date(d.earnings.next) : ''}</div></div></div></div></div>`;
+    const techBlock = `<div class="split mb" style="grid-template-columns:minmax(0,1fr) minmax(330px,34%)"><div class="card"><div class="card-h"><span class="card-t">Cena a klouzavé průměry · 3 roky</span></div><div class="card-b"><div id="fa-pch" style="height:300px"></div></div></div>
+        <div class="card"><div class="card-h"><span class="card-t">Technická analýza</span><span class="sp"></span><span id="fa-tsum"></span></div><div class="card-b np" id="fa-tech"></div></div></div>
+      <div class="grid g2 mb"><div class="card"><div class="card-h"><span class="card-t">Výkonnost a riziko</span></div><div class="card-b" id="fa-perf"></div></div>
+        <div class="card"><div class="card-h"><span class="card-t">Srovnání s konkurencí</span><span class="sp"></span><span class="card-s">klikněte pro analýzu</span></div><div class="card-b np" id="fa-peers"><div class="loading">Načítám</div></div></div></div>`;
+    const prof = p.summary ? `<div class="card"><div class="card-h"><span class="card-t">O společnosti</span><span class="sp"></span>${p.website ? `<a class="card-s" href="${esc(p.website)}" target="_blank" rel="noopener">${esc(p.website.replace(/^https?:\/\//, ''))}</a>` : ''}<a class="card-s" href="https://translate.google.com/?sl=en&tl=cs&text=${encodeURIComponent(p.summary.slice(0, 1500))}" target="_blank" rel="noopener">přeložit ↗</a></div><div class="card-b note" style="font-size:.86rem;color:var(--muted)">${esc(p.summary)}</div></div>` : '';
+    if (!has) {
+      $('#fa-body').innerHTML = head + `<div class="card mb"><div class="card-b note">Pro <b>${esc(d.symbol)}</b> (${esc(d.type || '')}) nejsou k dispozici účetní výkazy – fundamentální valuace je určena pro akcie. Níže je technická analýza a výkonnost.</div></div>` + techBlock + prof;
+      this.renderTech(); this.renderPeers(); paintQuotes(); return;
+    }
+    $('#fa-body').innerHTML = `${head}
+      <div class="grid g3 mb">
+        <div class="card"><div class="card-h"><span class="card-t">Férová cena</span><span class="sp"></span><span class="card-s">medián valuačních modelů</span></div><div class="card-b" id="fa-fv"></div></div>
+        <div class="card"><div class="card-h"><span class="card-t">Skóre akcie</span><span class="sp"></span><span class="card-s">0–100</span></div><div class="card-b" id="fa-score"></div></div>
+        <div class="card"><div class="card-h"><span class="card-t">Analytici</span><span class="sp"></span><span class="card-s">${d.fin.analysts ? d.fin.analysts + ' analytiků' : ''}</span></div><div class="card-b" id="fa-an"></div></div></div>
+      <div class="card mb"><div class="card-h"><span class="card-t">Valuační modely · football field</span><span class="sp"></span><span class="card-s">pruh = citlivostní rozpětí · značka = odhad · bílá = cena · modrá = férová cena</span></div><div class="card-b" id="fa-ff"></div></div>
+      <div class="card mb"><div class="card-h"><span class="card-t">Předpoklady modelů</span><span class="sp"></span><span class="card-s">změny se okamžitě promítnou do všech modelů</span><button class="btn sm" data-fa="reset">Výchozí</button></div><div class="card-b"><div class="as-grid" id="fa-as"></div><div class="note" id="fa-as-note" style="margin-top:8px"></div></div></div>
+      <div class="grid g2 mb"><div class="card"><div class="card-h"><span class="card-t">Detail modelů</span></div><div class="card-b np" id="fa-models"></div></div>
+        <div class="card"><div class="card-h"><span class="card-t">DCF projekce (10 let)</span></div><div class="card-b np" id="fa-dcf"></div></div></div>
+      <div class="card mb"><div class="card-h"><span class="card-t">Ukazatele</span><span class="sp"></span><span class="card-s">TTM = posledních 12 měsíců · zelená = dobré, oranžová = průměr, červená = slabé</span></div><div class="card-b" id="fa-ratios"></div></div>
+      <div class="grid g2 mb"><div class="card"><div class="card-h"><span class="card-t">Piotroski F-score</span><span class="sp"></span><span class="card-s" id="fa-pio-s"></span></div><div class="card-b" id="fa-pio"></div></div>
+        <div class="card"><div class="card-h"><span class="card-t">Altman Z-score · riziko bankrotu</span></div><div class="card-b" id="fa-alt"></div></div></div>
+      <div class="card mb"><div class="card-h"><span class="card-t">Finanční výkazy</span><span class="sp"></span><span class="card-s">v ${esc(d.finCur)} · fiskální roky + TTM</span></div><div class="card-b" id="fa-fin"></div></div>
+      ${techBlock}${prof}`;
+    this.renderAssume(); this.renderStatic(); this.renderTech(); this.renderPeers(); this.recalc(); paintQuotes();
+  },
+  renderAssume() {
+    const a = this.a, d = this.d, b = FA.base(d);
+    const num = (k, label, step) => `<label class="f">${label}<input class="in" type="number" step="${step}" data-as="${k}" value="${a[k] ?? ''}"></label>`;
+    $('#fa-as').innerHTML = num('g', 'Růst FCF / zisku – fáze 1 (%)', 0.5) +
+      `<label class="f">Délka fáze 1 (roky)<select class="in" data-as="years">${[3, 5, 7].map(y => `<option ${a.years === y ? 'selected' : ''}>${y}</option>`).join('')}</select></label>` +
+      num('gT', 'Terminální růst (%)', 0.25) + num('rf', `Bezriziková sazba ${esc(d.rf.name)} (%)`, 0.05) + num('beta', `Beta (upravená; Yahoo ${isNum(d.stats.beta) ? F.n(d.stats.beta, 2) : '—'}${FA.betaOf(d) !== d.stats.beta ? ', použita sektorová' : ''})`, 0.05) +
+      num('erp', 'Prémie za riziko akcií (%)', 0.25) + num('crp', 'Riziková přirážka země (%)', 0.25) +
+      `<label class="f">Diskontní sazba (%)<input class="in" type="number" step="0.1" data-as="rOverride" id="fa-r" placeholder="auto ${F.n(FA.rate({ ...a, rOverride: null }) * 100, 2)}" value="${a.rOverride ?? ''}"></label>` +
+      `<label class="f">Báze volného CF<select class="in" data-as="fcfBase"><option value="ttm" ${a.fcfBase === 'ttm' ? 'selected' : ''}>TTM ${F.big(b.fcf)}</option><option value="avg3" ${a.fcfBase === 'avg3' ? 'selected' : ''}>průměr 3 let ${F.big(b.fcfAvg3)}</option></select></label>` +
+      num('mos', 'Bezpečnostní marže (%)', 5);
+    $('#fa-as-note').innerHTML = `Výchozí růst = medián z: odhad analytiků na příští rok <b>${fps(b.gEst)}</b>, letos <b>${fps(b.gEst0)}</b>, CAGR tržeb ${b.yrs} r. <b>${fps(b.gRev)}</b>, CAGR EPS <b>${fps(b.gEps)}</b> (omezeno na −5 až 25 %). Bezriziková sazba ${esc(d.rf.name)} k ${esc(d.rf.date || '')}, korporátní AAA ${F.n(d.aaa, 2)} % (FRED).`;
+  },
+  onAssume(el) {
+    const k = el.dataset.as, v = el.value;
+    if (k === 'fcfBase') this.a.fcfBase = v;
+    else if (k === 'years') this.a.years = +v;
+    else if (k === 'rOverride') this.a.rOverride = v === '' ? null : numIn(v);
+    else { const n = numIn(v); if (n == null) return; this.a[k] = n; }
+    const r = $('#fa-r'); if (r) r.placeholder = 'auto ' + F.n(FA.rate({ ...this.a, rOverride: null }) * 100, 2);
+    this.recalc();
+  },
+  recalc() {
+    const d = this.d;
+    if (!d || !$('#fa-fv')) return;
+    const c = FA.compute(d, this.a, this.peerQ);
+    this.c = c;
+    $('#fa-fv').innerHTML = fvCardHtml(d, c, this.a);
+    $('#fa-ff').innerHTML = football(c.models, c.b.P, c.fair.fv, d.currency);
+    $('#fa-score').innerHTML = scoreHtml(c.S);
+    $('#fa-models').innerHTML = `<table class="t"><thead><tr><th class="l">Model</th><th>Hodnota</th><th>vs. cena</th><th class="l">Výpočet</th></tr></thead><tbody>${c.models.map(m => `<tr ${m.info ? 'style="opacity:.7"' : ''}><td class="l" style="font-family:var(--sans)"><b>${esc(m.name)}</b>${m.info ? ' <span class="badge">info</span>' : m.analyst ? ' <span class="badge blue">analytici</span>' : ' <span class="badge live">férová</span>'}</td><td>${isNum(m.v) ? F.p(m.v) : '—'}</td><td class="${isNum(m.v) ? F.cls(m.v / c.b.P - 1) : ''}">${isNum(m.v) ? F.pct((m.v / c.b.P - 1) * 100, 1) : ''}</td><td class="l" style="white-space:normal;font-family:var(--sans);font-size:.78rem;color:var(--muted)">${esc(m.note || '')}</td></tr>`).join('')}</tbody></table>`;
+    const dm = c.models.find(m => m.id === 'dcf'), x = dm && dm.dcf, fxv = c.b.fx;
+    $('#fa-dcf').innerHTML = x ? `<table class="t compact"><thead><tr><th>Rok</th><th>Růst</th><th>FCF</th><th>Současná hodnota</th></tr></thead><tbody>${x.rows.map(r => `<tr><td>${new Date().getFullYear() + r.t}</td><td>${fps(r.g)}</td><td>${F.big(r.fcf * fxv)}</td><td>${F.big(r.pv * fxv)}</td></tr>`).join('')}
+        <tr class="sec"><td colspan="4">Výsledek (${esc(d.currency)})</td></tr>
+        <tr><td colspan="3" class="l">Současná hodnota FCF 10 let</td><td>${F.big(x.pv * fxv)}</td></tr>
+        <tr><td colspan="3" class="l">Terminální hodnota → současná hodnota</td><td>${F.big(x.tv * fxv)} → ${F.big(x.pvTv * fxv)}</td></tr>
+        <tr><td colspan="3" class="l">Hodnota vlastního kapitálu</td><td><b>${F.big(x.value * fxv)}</b></td></tr>
+        <tr><td colspan="3" class="l">Počet akcií (ekvivalent)</td><td>${F.big(c.b.sh)}</td></tr>
+        <tr><td colspan="3" class="l"><b>Hodnota na akcii</b></td><td><b class="${F.cls(dm.v / c.b.P - 1)}">${F.p(dm.v)}</b></td></tr>
+        <tr><td colspan="3" class="l dim">Podíl terminální hodnoty</td><td class="dim">${F.n((x.pvTv / x.value) * 100, 0)} %</td></tr></tbody></table>` : `<div class="empty">${esc(dm ? dm.note : 'DCF nelze spočítat')}</div>`;
+  },
+  renderStatic() {
+    const d = this.d, c = FA.compute(d, this.a, this.peerQ), R = c.R, b = c.b, fi = d.fin;
+    // analysts
+    const tgt = fi.targetMedian ?? fi.targetMean;
+    const recs = d.recs.slice(0, 4);
+    const RC = [['strongBuy', '#0f9d58', 'Silně koupit'], ['buy', '#1fbf75', 'Koupit'], ['hold', '#94a3b8', 'Držet'], ['sell', '#f08a2e', 'Prodat'], ['strongSell', '#f0444f', 'Silně prodat']];
+    $('#fa-an').innerHTML = isNum(fi.recMean) || isNum(tgt) ? `<div class="row mb" style="align-items:baseline"><span class="fa-big" style="font-size:1.6rem;color:${fi.recMean <= 2 ? UPC : fi.recMean >= 3.5 ? DNC : '#f0a92e'}">${esc(REC_L[fi.recKey] || fi.recKey || '—')}</span><span class="note">${isNum(fi.recMean) ? F.n(fi.recMean, 2) + ' (1 = silně koupit, 5 = prodat)' : ''}</span></div>
+      ${isNum(tgt) ? [['Cíl – medián', fi.targetMedian], ['Cíl – průměr', fi.targetMean], ['Cíl – nejvyšší', fi.targetHigh], ['Cíl – nejnižší', fi.targetLow]].filter(x => isNum(x[1])).map(([k, v]) => `<div class="mini"><span class="k">${k}</span><span class="v">${F.p(v)} <span class="${F.cls(v / b.P - 1)}">${F.pct((v / b.P - 1) * 100, 0)}</span></span></div>`).join('') : ''}
+      ${recs.length ? `<div class="note" style="margin:10px 0 4px">Vývoj doporučení</div>${recs.map(r => { const tot = RC.reduce((s, [k]) => s + (r[k] || 0), 0) || 1; return `<div class="row" style="gap:8px;flex-wrap:nowrap;margin-bottom:4px"><span class="mono dim" style="width:2.4rem;font-size:.74rem">${r.period === '0m' ? 'teď' : esc(r.period.replace('m', ' M'))}</span><div class="rec-bar" style="flex:1">${RC.map(([k, col, l]) => r[k] ? `<i style="width:${(r[k] / tot) * 100}%;background:${col}" title="${l}: ${r[k]}"></i>` : '').join('')}</div><span class="mono dim" style="font-size:.74rem">${tot}</span></div>`; }).join('')}<div class="legend" style="flex-direction:row;flex-wrap:wrap;gap:8px;margin-top:4px">${RC.map(([, col, l]) => `<div><i style="background:${col}"></i><span style="font-size:.7rem">${l}</span></div>`).join('')}</div>` : ''}
+      ${d.earnings.history.length ? `<div class="note" style="margin:10px 0 4px">Výsledky vs. odhad EPS${d.earnings.next ? ` · příští ${F.date(d.earnings.next)}${isNum(d.earnings.epsEstimate) ? ' (odhad ' + F.n(d.earnings.epsEstimate, 2) + ')' : ''}` : ''}</div><table class="t compact">${d.earnings.history.slice(-4).reverse().map(h => `<tr><td>${h.q ? F.date(h.q) : esc(h.period)}</td><td>${fx2(h.actual)}</td><td class="dim">${fx2(h.estimate)}</td><td class="${F.cls(h.surprise)}">${F.pct(h.surprise, 1)}</td></tr>`).join('')}</table>` : ''}` : '<div class="empty">Akcii nepokrývají analytici</div>';
+    // ratios
+    const row = (k, v, cls = '', t = '') => `<div class="mini" ${t ? `title="${esc(t)}"` : ''}><span class="k">${k}</span><span class="v ${cls}">${v}</span></div>`;
+    const grp = (title, rows) => `<div><div class="grp-h" style="margin-top:4px">${title}</div>${rows.join('')}</div>`;
+    const cur = esc(d.currency), y = Math.max(1, b.yrs);
+    $('#fa-ratios').innerHTML = `<div class="rt">
+      ${grp('Valuace', [row('P/E (TTM)', fx2(R.pe, 1), RCLS(R.pe, 15, 30), 'cena / zisk na akcii'), row('Forward P/E', fx2(R.fpe, 1), RCLS(R.fpe, 15, 28)), row('PEG', fx2(R.peg), RCLS(R.peg, 1, 2), 'P/E / očekávaný růst zisku'), row('P/B', fx2(R.pb), RCLS(R.pb, 1.5, 6)), row('P/S', fx2(R.ps), RCLS(R.ps, 2, 8)), row('P/FCF', fx2(R.pfcf, 1), RCLS(R.pfcf, 15, 35)), row('EV/EBITDA', fx2(R.evEbitda, 1), RCLS(R.evEbitda, 10, 20)), row('EV/EBIT', fx2(R.evEbit, 1), RCLS(R.evEbit, 12, 25)), row('EV/Tržby', fx2(R.evSales)), row('Ziskový výnos (E/P)', fp(R.ey), RCLS(R.ey, 0.06, 0.03)), row('FCF výnos', fp(R.fcfy), RCLS(R.fcfy, 0.05, 0.02)), row('Hodnota podniku (EV)', F.big(R.ev) + ' ' + cur)])}
+      ${grp('Ziskovost', [row('Hrubá marže', fp(R.gm), RCLS(R.gm, 0.4, 0.2)), row('Provozní marže', fp(R.om), RCLS(R.om, 0.2, 0.08)), row('Čistá marže', fp(R.nm), RCLS(R.nm, 0.15, 0.05)), row('EBITDA marže', fp(R.ebitdam)), row('FCF marže', fp(R.fcfm), RCLS(R.fcfm, 0.15, 0.03)), row('ROE', fp(R.roe), RCLS(R.roe, 0.15, 0.08), 'rentabilita vlastního kapitálu'), row('ROA', fp(R.roa), RCLS(R.roa, 0.08, 0.03)), row('ROIC', fp(R.roic), RCLS(R.roic, 0.12, 0.06), 'rentabilita investovaného kapitálu'), row('ROCE', fp(R.roce), RCLS(R.roce, 0.15, 0.07)), row('Výzkum a vývoj / tržby', fp(R.rndr)), row('Odměny v akciích / tržby', fp(R.sbcr), RCLS(R.sbcr, 0.03, 0.1))])}
+      ${grp('Růst', [row('Tržby YoY (TTM)', fps(R.revYoY), RCLS(R.revYoY, 0.1, 0)), row('Čistý zisk YoY (TTM)', fps(R.niYoY), RCLS(R.niYoY, 0.1, 0)), row(`Tržby CAGR ${y} r.`, fps(R.revCagr), RCLS(R.revCagr, 0.08, 0)), row(`EPS CAGR ${y} r.`, fps(R.epsCagr), RCLS(R.epsCagr, 0.08, 0)), row(`FCF CAGR ${y} r.`, fps(R.fcfCagr), RCLS(R.fcfCagr, 0.08, 0)), row('Odhad růstu EPS letos', fps(R.gEst0), RCLS(R.gEst0, 0.08, 0)), row('Odhad růstu EPS příští rok', fps(R.gEst), RCLS(R.gEst, 0.08, 0))])}
+      ${grp('Finanční zdraví', [row('Dluh / vlastní kapitál', fx2(R.de), RCLS(R.de, 0.5, 1.5)), row('Čistý dluh / EBITDA', isNum(R.ndEbitda) ? (R.ndEbitda < 0 ? 'čistá hotovost' : fx2(R.ndEbitda)) : '—', isNum(R.ndEbitda) ? (R.ndEbitda < 0 ? 'g' : RCLS(R.ndEbitda, 1, 3)) : ''), row('Běžná likvidita', fx2(R.cr), RCLS(R.cr, 1.5, 1)), row('Rychlá likvidita', fx2(R.qr), RCLS(R.qr, 1, 0.7)), row('Úrokové krytí (EBIT/úroky)', isNum(R.ic) ? fx2(R.ic, 1) + '×' : '—', RCLS(R.ic, 8, 3)), row('Vlastní kapitál / aktiva', fp(R.eqr)), row('Hotovost na akcii', F.p(R.cashPs) + ' ' + cur), row('Čistá hotovost / (dluh)', F.big(R.netCash) + ' ' + cur, R.netCash >= 0 ? 'g' : '')])}
+      ${grp('Dividenda & akcionáři', [row('Dividenda na akcii', b.dps ? F.p(b.dps) + ' ' + cur : 'nevyplácí'), row('Dividendový výnos', fp(R.dy, 2), RCLS(R.dy, 0.03, 0.005)), row('Výplatní poměr (ze zisku)', fp(R.payout), RCLS(R.payout, 0.6, 0.9)), row('Výplatní poměr (z FCF)', fp(R.fcfPayout), RCLS(R.fcfPayout, 0.7, 1)), row('Průměrný výnos 5 let', isNum(d.stats.divYield5y) ? F.n(d.stats.divYield5y, 2) + ' %' : '—'), row('Ex-dividend', d.stats.exDivDate ? F.date(d.stats.exDivDate) : '—'), row('Výnos ze zpětných odkupů', fp(R.bby, 2)), row('Shareholder yield', fp(R.shy, 2), RCLS(R.shy, 0.04, 0.01)), row('Změna počtu akcií YoY', fps(R.shChg, 2), isNum(R.shChg) ? (R.shChg < 0 ? 'g' : R.shChg > 0.03 ? 'b' : 'm') : ''), row('Insideři / instituce', `${isNum(d.stats.insiders) ? F.n(d.stats.insiders, 1) + ' %' : '—'} / ${isNum(d.stats.institutions) ? F.n(d.stats.institutions, 1) + ' %' : '—'}`), row('Short interest (% floatu)', isNum(d.stats.shortPctFloat) ? F.n(d.stats.shortPctFloat, 2) + ' %' : '—', RCLS(d.stats.shortPctFloat, 3, 10)), row('Obrat aktiv / zásob', `${fx2(R.at)} / ${fx2(R.it, 1)}`)])}
+    </div>`;
+    // piotroski & altman
+    const pio = c.pio;
+    $('#fa-pio-s').innerHTML = pio ? `<b style="color:${pio.score >= 7 ? UPC : pio.score >= 4 ? '#f0a92e' : DNC}">${pio.score} / ${pio.max}</b>` : '';
+    $('#fa-pio').innerHTML = pio ? pio.items.map(i => `<div class="chk-l"><span class="ic2" style="color:${i.ok === null ? 'var(--dim)' : i.ok ? UPC : DNC}">${i.ok === null ? '·' : i.ok ? '✓' : '✗'}</span><span>${esc(i.label)}</span><span class="d">${esc(i.detail)}</span></div>`).join('') + `<p class="note" style="margin-top:8px">8–9 = silná a zlepšující se firma, 0–3 = slabá. Porovnává poslední dva fiskální roky.</p>` : '<div class="empty">Nedostatek ročních výkazů</div>';
+    const alt = c.alt;
+    $('#fa-alt').innerHTML = alt ? `<div class="row mb" style="align-items:baseline"><span class="fa-big" style="color:${alt.zone === 'safe' ? UPC : alt.zone === 'grey' ? '#f0a92e' : DNC}">${F.n(alt.z, 2)}</span><span class="verdict ${alt.zone === 'safe' ? 'v2' : alt.zone === 'grey' ? 'v0' : 'v-2'}">${alt.zone === 'safe' ? 'Bezpečná zóna' : alt.zone === 'grey' ? 'Šedá zóna' : 'Riziko tísně'}</span></div>
+      <div class="prog" style="height:10px;position:relative;background:linear-gradient(90deg,#f0444f 0%,#f0444f 36%,#f0a92e 36%,#f0a92e 60%,#1fbf75 60%)"><i style="position:absolute;left:${clamp((alt.z / 5) * 100, 0, 100)}%;top:-3px;width:3px;height:14px;background:#fff"></i></div>
+      <div class="row note" style="justify-content:space-between;margin:2px 0 8px"><span>0</span><span>1,81</span><span>2,99</span><span>5+</span></div>
+      ${[['A', 'Pracovní kapitál / aktiva', 1.2], ['B', 'Nerozdělený zisk / aktiva', 1.4], ['C', 'EBIT / aktiva', 3.3], ['D', 'Tržní kap. / závazky', 0.6], ['E', 'Tržby / aktiva', 1.0]].map(([k, l, w]) => `<div class="mini"><span class="k">${l} (×${w})</span><span class="v">${F.n(alt.p[k], 3)}</span></div>`).join('')}
+      ${/utilities|real estate|energy/i.test(d.profile.sector || '') ? '<p class="note" style="margin-top:8px">U utilit, nemovitostí a kapitálově náročných firem vychází Z-score přirozeně nižší (velká aktiva, stabilní regulované příjmy) – berte ho s rezervou.</p>' : ''}` : `<div class="empty">${b.fin ? 'Altman Z se nepoužívá pro banky a finanční firmy' : 'Nedostatek dat'}</div>`;
+    // statements
+    const A = d.annual.slice(-5), T = d.ttm || {}, cols = [...A.map(a => ({ l: 'FY ' + a.date.slice(0, 4), v: a })), ...(T.revenue != null || T.netIncome != null ? [{ l: 'TTM', v: { ...T, fcf: isNum(T.fcf) ? T.fcf : isNum(T.ocf) && isNum(T.capex) ? T.ocf + T.capex : null } }] : [])];
+    const LINES = [['Tržby', 'revenue'], ['Hrubý zisk', 'grossProfit'], ['Provozní zisk', 'opIncome'], ['EBITDA', 'ebitda'], ['Čistý zisk', 'netIncome'], ['EPS (zředěný)', 'eps', 'eps'], ['Provozní cash flow', 'ocf'], ['Kapitálové výdaje', 'capex'], ['Volné cash flow', 'fcf'], ['Dividendy', 'dividends'], ['Zpětné odkupy', 'buybacks'], ['Celková aktiva', 'assets'], ['Vlastní kapitál', 'equity'], ['Celkový dluh', 'debt'], ['Hotovost a investice', 'cashSti'], ['Počet akcií', 'shares']];
+    $('#fa-fin').innerHTML = cols.length ? `${gbars(cols.map(x => x.l), [{ name: 'Tržby', color: '#2962ff', data: cols.map(x => x.v.revenue) }, { name: 'Čistý zisk', color: '#1fbf75', data: cols.map(x => x.v.netIncome) }, { name: 'Volné CF', color: '#f0a92e', data: cols.map(x => x.v.fcf) }], 190, $('#fa-fin').clientWidth - 20)}
+      <div style="overflow:auto;margin-top:8px"><table class="t compact"><thead><tr><th class="l"></th>${cols.map(x => `<th>${esc(x.l)}</th>`).join('')}</tr></thead><tbody>${LINES.filter(([, k]) => cols.some(x => isNum(x.v[k]))).map(([l, k, t]) => `<tr><td class="l" style="font-family:var(--sans)">${l}</td>${cols.map((x, i) => { const v = x.v[k], pv = i > 0 && x.l !== 'TTM' ? cols[i - 1].v[k] : null; const g = isNum(v) && isNum(pv) && pv > 0 && ['revenue', 'netIncome', 'fcf', 'eps', 'ocf', 'ebitda', 'opIncome', 'grossProfit'].includes(k) ? v / pv - 1 : null; return `<td>${isNum(v) ? (t === 'eps' ? F.n(v, 2) : F.big(v)) : '<span class="dim">—</span>'}${g != null ? `<div class="${F.cls(g)}" style="font-size:.68rem">${F.pct(g * 100, 0)}</div>` : ''}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Výkazy nejsou k dispozici</div>';
+  },
+  renderTech() {
+    const t = this.d.tech, s = FA.techSignals(t);
+    if (!t) { $('#fa-tech').innerHTML = '<div class="empty">Nedostatek cenové historie</div>'; $('#fa-perf').innerHTML = ''; return; }
+    const lab = v => (v > 0 ? '<span class="badge live">Nákup</span>' : v < 0 ? '<span class="badge err">Prodej</span>' : '<span class="badge">Neutrální</span>');
+    $('#fa-tsum').innerHTML = `<span class="verdict ${s.score > 0.15 ? 'v2' : s.score < -0.15 ? 'v-2' : 'v0'}">${s.label}</span>`;
+    $('#fa-tech').innerHTML = `<table class="t compact"><thead><tr><th class="l">Indikátor</th><th>Hodnota</th><th class="l">Signál</th></tr></thead><tbody>${s.list.map(x => `<tr title="${esc(x.why || '')}"><td class="l" style="font-family:var(--sans)">${esc(x.name)}</td><td>${esc(x.val)}</td><td class="l">${lab(x.v)} <span class="dim" style="font-family:var(--sans);font-size:.74rem">${esc(x.why || '')}</span></td></tr>`).join('')}</tbody></table>`;
+    const P = t.perf, cur = esc(this.d.currency);
+    const pr = (k, v) => `<div class="mini"><span class="k">${k}</span><span class="v ${F.cls(v)}">${F.pct(v, 1)}</span></div>`;
+    $('#fa-perf').innerHTML = `<div class="grid g2" style="gap:0 20px"><div>${pr('1 týden', P.w1)}${pr('1 měsíc', P.m1)}${pr('3 měsíce', P.m3)}${pr('6 měsíců', P.m6)}${pr('Od začátku roku', P.ytd)}${pr('1 rok', P.y1)}${pr('3 roky', P.y3)}${pr('5 let', P.y5)}</div>
+      <div><div class="mini"><span class="k">Volatilita (1 rok, ročně)</span><span class="v">${F.n(t.vol1y, 1)} %</span></div><div class="mini"><span class="k">Max. propad 1 rok</span><span class="v dn">${F.n(t.mdd1y, 1)} %</span></div><div class="mini"><span class="k">Max. propad 5 let</span><span class="v dn">${F.n(t.mdd5y, 1)} %</span></div><div class="mini"><span class="k">Sharpe ratio (1 rok)</span><span class="v">${fx2(t.sharpe1y)}</span></div><div class="mini"><span class="k">ATR (14) / cena</span><span class="v">${F.n(t.atrPct, 2)} %</span></div><div class="mini"><span class="k">52T max / min</span><span class="v">${F.p(t.high52)} / ${F.p(t.low52)}</span></div><div class="mini"><span class="k">Od 52T maxima</span><span class="v ${F.cls(t.last / t.high52 - 1)}">${F.pct((t.last / t.high52 - 1) * 100, 1)}</span></div><div class="mini"><span class="k">Beta</span><span class="v">${fx2(this.d.stats.beta)}</span></div></div></div>`;
+    if (this.pch) this.pch.destroy();
+    const h = t.hist;
+    this.pch = new Chart($('#fa-pch'), { fmtY: v => F.n(v, v >= 100 ? 0 : 2) });
+    this.pch.set([{ name: 'Cena ' + cur, data: h.t.map((x, i) => [x, h.c[i]]), color: '#5c87ff', area: true, width: 1.8 }, { name: 'SMA 50', data: h.t.map((x, i) => [x, h.s50[i]]), color: '#f0a92e', width: 1.2 }, { name: 'SMA 200', data: h.t.map((x, i) => [x, h.s200[i]]), color: '#a371f7', width: 1.2 }]);
+  },
+  renderPeers() {
+    const el = $('#fa-peers'), d = this.d;
+    if (!el) return;
+    if (!d.peers || !d.peers.length) { el.innerHTML = '<div class="empty">Konkurence není k dispozici</div>'; return; }
+    if (!this.peerQ) return;
+    const self = { symbol: d.symbol, name: d.name, price: d.price, currency: d.currency, marketCap: d.marketCap, pe: this.c ? this.c.R.pe : d.stats.pe, fpe: this.c ? this.c.R.fpe : d.stats.fpe, pb: this.c ? this.c.R.pb : d.stats.pb, divYield: d.stats.dividendYield, changePct: d.changePct, self: true };
+    const rows = [self, ...this.peerQ];
+    const med = k => median(this.peerQ.map(q => q[k]).filter(v => isNum(v) && v > 0 && v < 500));
+    el.innerHTML = `<table class="t compact"><thead><tr><th>Firma</th><th>Kap.</th><th>P/E</th><th>Fwd P/E</th><th>P/B</th><th>Div. %</th><th>Den</th></tr></thead><tbody>${rows.map(q => `<tr class="${q.self ? '' : 'click'}" ${q.self ? 'style="background:var(--accent-bg)"' : `data-fa="peer" data-s="${esc(q.symbol)}"`}><td><span class="sym">${esc(q.symbol)}</span><span class="nm">${esc(q.name || '')}</span></td><td>${F.big(q.marketCap, 1)}</td><td>${fx2(q.pe, 1)}</td><td>${fx2(q.fpe, 1)}</td><td>${fx2(q.pb, 1)}</td><td>${isNum(q.divYield) ? F.n(q.divYield, 2) : '—'}</td><td class="${F.cls(q.changePct)}">${F.pct(q.changePct)}</td></tr>`).join('')}
+      <tr class="sec"><td>Medián konkurence</td><td></td><td>${fx2(med('pe'), 1)}</td><td>${fx2(med('fpe'), 1)}</td><td>${fx2(med('pb'), 1)}</td><td>${fx2(median(this.peerQ.map(q => q.divYield)), 2)}</td><td></td></tr></tbody></table>`;
+  },
+  async compact(el, y) {
+    el.innerHTML = '<div class="loading">Počítám férovou cenu</div>';
+    try {
+      const d = await API.get('api/fundamentals?s=' + encodeURIComponent(y), 45000);
+      if (!(d.annual && d.annual.length) && !isNum(d.stats.trailingEps)) { el.innerHTML = '<div class="empty">Fundamentální valuace je dostupná jen pro akcie.</div>'; return; }
+      let peerQ = null;
+      if (d.peers && d.peers.length) { try { const r = await API.get('api/quotes?s=' + encodeURIComponent(d.peers.join(','))); peerQ = d.peers.map(s => r[s]).filter(q => q && q.type === 'EQUITY'); } catch {} }
+      const a = FA.defaults(d, FA.base(d)), c = FA.compute(d, a, peerQ);
+      el.innerHTML = `<div class="grid g2 mb"><div>${fvCardHtml(d, c, a)}</div><div>${scoreHtml(c.S, true)}</div></div>${football(c.models, c.b.P, c.fair.fv, d.currency)}
+        <div class="row" style="margin-top:12px"><span class="note">P/E ${fx2(c.R.pe, 1)} · EV/EBITDA ${fx2(c.R.evEbitda, 1)} · ROE ${fp(c.R.roe)} · čistá marže ${fp(c.R.nm)} · Piotroski ${c.pio ? c.pio.score + '/' + c.pio.max : '—'}</span><span class="sp"></span><button class="btn pri sm" data-goto-fa="${esc(y)}">Plná analýza (FA) →</button></div>`;
+    } catch (e) { el.innerHTML = `<div class="empty">Fundamentální data nejsou k dispozici: ${esc(e.message)}</div>`; }
+  },
+};
+
 /* ═════════════════════════ INSTRUMENT DETAIL (DES) ═════════════════════════ */
 function openDES(sym, tab = 'overview') {
   if (!sym) return;
   const y = sym.y, tv = sym.tv || (y && yToTv(y));
   const m = modal(`${esc(sym.l || y || tv)} <span class="dim" style="font-weight:400">${esc(sym.n && sym.n !== sym.l ? sym.n : '')}</span>`, `
     <div class="qhdr mb" id="ds-h">${y ? `<span class="p">${qc(y)}</span>${qc(y, 'chg')} ${qc(y, 'pct')} <span class="badge">${qc(y, 'state')}</span>` : ''}<span class="sp"></span><span class="note" id="ds-ex"></span></div>
-    <div class="subnav"><div class="tabs" data-g="ds"><button class="tab" data-t="overview">Přehled</button><button class="tab" data-t="chart">Graf</button><button class="tab" data-t="ta">TradingView analýza</button><button class="tab" data-t="news">Zprávy</button></div><span class="sp"></span>
-      <button class="btn sm" id="ds-go">Do hlavního grafu</button>${y ? '<button class="btn sm" id="ds-wl">+ Watchlist</button><button class="btn sm" id="ds-al">🔔 Alert</button><button class="btn sm" id="ds-pf">+ Portfolio</button>' : ''}<a class="btn sm" href="https://www.tradingview.com/symbols/${esc(encodeURIComponent((tv || '').replace(':', '-')))}/" target="_blank" rel="noopener">TradingView ↗</a></div>
+    <div class="subnav"><div class="tabs" data-g="ds"><button class="tab" data-t="overview">Přehled</button><button class="tab" data-t="val">Valuace</button><button class="tab" data-t="chart">Graf</button><button class="tab" data-t="ta">TradingView analýza</button><button class="tab" data-t="news">Zprávy</button></div><span class="sp"></span>
+      ${y ? '<button class="btn sm pri" id="ds-fa">Analýza (FA)</button>' : ''}<button class="btn sm" id="ds-go">Do hlavního grafu</button>${y ? '<button class="btn sm" id="ds-wl">+ Watchlist</button><button class="btn sm" id="ds-al">🔔 Alert</button><button class="btn sm" id="ds-pf">+ Portfolio</button>' : ''}<a class="btn sm" href="https://www.tradingview.com/symbols/${esc(encodeURIComponent((tv || '').replace(':', '-')))}/" target="_blank" rel="noopener">TradingView ↗</a></div>
     <div data-g="ds" data-p="overview"><div class="grid g2"><div id="ds-stats"><div class="loading">Načítám</div></div><div style="height:300px" id="ds-mini"></div></div></div>
+    <div data-g="ds" data-p="val"><div id="ds-val"></div></div>
     <div data-g="ds" data-p="chart"><div style="height:58vh;min-height:360px" id="ds-chart"></div></div>
     <div data-g="ds" data-p="ta"><div class="grid g2"><div style="height:460px" id="ds-ta"></div><div style="height:460px" id="ds-prof"></div></div></div>
     <div data-g="ds" data-p="news"><div id="ds-news" style="max-height:60vh;overflow:auto"></div></div>`, { size: 'wide' });
@@ -2769,6 +3348,7 @@ function openDES(sym, tab = 'overview') {
   const t = tabs($('[data-g="ds"].tabs', b), async v => {
     if (done[v]) return;
     done[v] = 1;
+    if (v === 'val') { if (y) Pages.stock.compact($('#ds-val', b), y); else $('#ds-val', b).innerHTML = '<div class="empty">Valuace je dostupná jen pro akcie s Yahoo symbolem.</div>'; }
     if (v === 'chart') { if (y) big = nativeChart($('#ds-chart', b), y, { range: '1R' }); else TV.chart($('#ds-chart', b), tv); }
     if (v === 'ta') {
       TV.mount($('#ds-ta', b), 'technical-analysis', { interval: '1D', symbol: tv, showIntervalTabs: true, displayMode: 'single' });
@@ -2782,6 +3362,8 @@ function openDES(sym, tab = 'overview') {
     }
   }, tab);
   $('#ds-go', b).onclick = () => { m.close(); showChart(sym); };
+  if (y) $('#ds-fa', b).onclick = () => { m.close(); go('stock', y); };
+  b.addEventListener('click', e => { const g = e.target.closest('[data-goto-fa]'); if (g) { m.close(); go('stock', g.dataset.gotoFa); } });
   if (y) {
     $('#ds-wl', b).onclick = () => addToWatchlist(y);
     $('#ds-al', b).onclick = () => { m.close(); go('portfolio', 'alerts'); setTimeout(() => Pages.portfolio.prefillAlert(y), 80); };
@@ -2928,7 +3510,7 @@ function openHelp() {
     <p class="note mb">Příkazová řádka funguje jako v Bloombergu: napište symbol nebo příkaz a stiskněte <kbd>Enter</kbd> (GO). Kurzor do řádky dostanete klávesou <kbd>/</kbd>, <kbd>Ctrl</kbd>+<kbd>K</kbd> nebo prostým psaním písmen.</p>
     <div class="grp-h">Stránky a funkce</div><div class="help-g">${CMDS.map(c => `<div><b>${c.k.slice(0, 2).join(' · ')}</b><span>${esc(c.d)}</span></div>`).join('')}</div>
     <div class="grp-h">Funkce k instrumentu  (např. <span class="mono">AAPL DES</span>)</div><div class="help-g">${Object.entries(FUNCS).map(([k, d]) => `<div><b>SYMBOL ${k}</b><span>${esc(d)}</span></div>`).join('')}<div><b>SYMBOL</b><span>Samotný symbol otevře hlavní graf</span></div></div>
-    <div class="grp-h">Klávesové zkratky</div><div class="help-g"><div><b>1 – 7</b><span>přepnutí stránek</span></div><div><b>/  ·  Ctrl+K</b><span>příkazová řádka</span></div><div><b>Esc</b><span>zavřít okno / zrušit</span></div><div><b>?</b><span>tato nápověda</span></div><div><b>,</b><span>nastavení</span></div><div><b>↑ ↓ Tab</b><span>výběr v našeptávači</span></div></div>
+    <div class="grp-h">Klávesové zkratky</div><div class="help-g"><div><b>1 – 8</b><span>přepnutí stránek</span></div><div><b>/  ·  Ctrl+K</b><span>příkazová řádka</span></div><div><b>Esc</b><span>zavřít okno / zrušit</span></div><div><b>?</b><span>tato nápověda</span></div><div><b>,</b><span>nastavení</span></div><div><b>↑ ↓ Tab</b><span>výběr v našeptávači</span></div></div>
     <div class="grp-h">Symboly</div><p class="note">Interní klíče: ${Object.keys(I).join(', ')}. Cokoliv jiného se hledá jako Yahoo Finance symbol (např. <span class="mono">VWCE.DE</span>, <span class="mono">BRK-B</span>, <span class="mono">EURHUF=X</span>) nebo TradingView symbol s burzou (<span class="mono">NASDAQ:NVDA</span>).</p>`, { size: 'wide' });
 }
 
@@ -3032,7 +3614,7 @@ function clock() {
     const t = e.target, typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.isContentEditable;
     if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === '/') { e.preventDefault(); $('#cmd').focus(); }
-    else if (/^[1-7]$/.test(e.key) && !$$('#modal-root .ov').length) go(NAV[+e.key - 1][0]);
+    else if (/^[1-8]$/.test(e.key) && !$$('#modal-root .ov').length) go(NAV[+e.key - 1][0]);
     else if (e.key === '?') openHelp();
     else if (e.key === ',') openSettings();
     else if (/^[a-zA-Z]$/.test(e.key) && !$$('#modal-root .ov').length) $('#cmd').focus();
