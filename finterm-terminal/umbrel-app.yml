@@ -4,7 +4,7 @@ category: finance
 name: FinTerm
 version: "1.0.0"
 tagline: Bloomberg-style finanční terminál – trhy, kalendář, zprávy, krypto, portfolio
-icon: https://raw.githubusercontent.com/GITHUB_USER/GITHUB_REPO/main/finterm-terminal/app/public/icon.svg
+icon: https://raw.githubusercontent.com/davidfreitagdev-oss/finterm-umbrel/main/finterm-terminal/app/public/icon.svg
 description: >-
   FinTerm je self-hosted finanční terminál inspirovaný Bloombergem a Refinitivem.
 
@@ -30,14 +30,14 @@ description: >-
 releaseNotes: >-
   První verze FinTermu.
 developer: FinTerm
-website: https://github.com/GITHUB_USER/GITHUB_REPO
+website: https://github.com/davidfreitagdev-oss/finterm-umbrel
 dependencies: []
-repo: https://github.com/GITHUB_USER/GITHUB_REPO
-support: https://github.com/GITHUB_USER/GITHUB_REPO/issues
+repo: https://github.com/davidfreitagdev-oss/finterm-umbrel
+support: https://github.com/davidfreitagdev-oss/finterm-umbrel/issues
 port: 8420
 gallery: []
 path: ""
 defaultUsername: ""
 defaultPassword: ""
 submitter: FinTerm
-submission: https://github.com/GITHUB_USER/GITHUB_REPO
+submission: https://github.com/davidfreitagdev-oss/finterm-umbrel
