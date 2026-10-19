@@ -1,0 +1,31 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: finterm-terminal_web_1
+      APP_PORT: 8420
+
+  web:
+    # Official multi-arch Node image (arm64 for Raspberry Pi 5). The app code is
+    # shipped inside this app folder and mounted read-only – no custom image needed.
+    image: node:22-alpine
+    restart: on-failure
+    stop_grace_period: 20s
+    init: true
+    user: "1000:1000"
+    working_dir: /app
+    command: ["node", "server.js"]
+    environment:
+      PORT: 8420
+      DATA_DIR: /data
+      TZ: Europe/Prague
+      NODE_ENV: production
+    volumes:
+      - ${APP_DATA_DIR}/app:/app:ro
+      - ${APP_DATA_DIR}/data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8420/api/status"]
+      interval: 60s
+      timeout: 5s
+      retries: 3

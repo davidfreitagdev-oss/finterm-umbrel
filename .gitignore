@@ -1,0 +1,6 @@
+# runtime data – never commit (it would be copied into every Umbrel install)
+finterm-terminal/data/*
+!finterm-terminal/data/.gitkeep
+finterm-data/
+node_modules/
+*.log

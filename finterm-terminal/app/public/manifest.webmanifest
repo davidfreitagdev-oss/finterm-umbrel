@@ -1,0 +1,14 @@
+{
+  "name": "FinTerm – finanční terminál",
+  "short_name": "FinTerm",
+  "description": "Self-hosted Bloomberg-style finanční terminál pro Umbrel / Raspberry Pi",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#090c10",
+  "theme_color": "#090c10",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

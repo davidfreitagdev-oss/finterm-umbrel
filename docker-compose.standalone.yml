@@ -1,0 +1,26 @@
+# FinTerm bez Umbrel App Store – libovolný Raspberry Pi / server s Dockerem
+# (funguje i přímo na Umbrelu přes SSH, aplikace ale nebude v Umbrel dashboardu).
+#
+#   docker compose -f docker-compose.standalone.yml up -d
+#   → http://<ip-zarizeni>:8420
+services:
+  finterm:
+    image: node:22-alpine
+    container_name: finterm
+    restart: unless-stopped
+    init: true
+    working_dir: /app
+    command: ["node", "server.js"]
+    ports:
+      - "8420:8420"
+    environment:
+      PORT: 8420
+      DATA_DIR: /data
+      TZ: Europe/Prague
+      NODE_ENV: production
+      # Bez Umbrelu není před aplikací přihlášení – doporučeno nastavit:
+      # BASIC_AUTH: "admin:silne-heslo"
+      # MEMPOOL_URL: "http://umbrel.local:3006"
+    volumes:
+      - ./finterm-terminal/app:/app:ro
+      - ./finterm-data:/data

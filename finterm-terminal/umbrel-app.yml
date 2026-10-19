@@ -1,0 +1,43 @@
+manifestVersion: 1
+id: finterm-terminal
+category: finance
+name: FinTerm
+version: "1.0.0"
+tagline: Bloomberg-style finanční terminál – trhy, kalendář, zprávy, krypto, portfolio
+icon: https://raw.githubusercontent.com/GITHUB_USER/GITHUB_REPO/main/finterm-terminal/app/public/icon.svg
+description: >-
+  FinTerm je self-hosted finanční terminál inspirovaný Bloombergem a Refinitivem.
+
+
+  • Přehled trhů: TradingView graf s vyhledáváním libovolného aktiva, multi-chart 2×2,
+  watchlisty (akcie & indexy, komodity, krypto, sazby & měny), market pulse, světové burzy.
+
+  • Ekonomický kalendář: nadcházející události s odpočtem, historie forecast vs. actual,
+  centrální banky (FED, ECB, ČNB, BoE, BoJ), makro dashboard z FRED a ČNB.
+
+  • Zprávy: 65+ RSS zdrojů rozdělených na Česko / USA / Svět a témata
+  (makro & geopolitika, trhy & earnings, krypto & regulace), breaking news.
+
+  • Analýza: heatmapy akcií a krypta, síla měn, sektory, korelace, výnosová křivka, screener.
+
+  • Krypto: real-time ceny přes WebSocket, top 100, Bitcoin síť (mempool, poplatky, halving).
+
+  • Portfolio v CZK/EUR/USD, watchlist, cenové alerty 24/7 s push notifikacemi
+  (ntfy, Telegram, webhook), obchodní deník a rozcestník Umbrel aplikací.
+
+
+  Žádné API klíče nejsou potřeba. Data jsou uložena lokálně na vašem Umbrelu.
+releaseNotes: >-
+  První verze FinTermu.
+developer: FinTerm
+website: https://github.com/GITHUB_USER/GITHUB_REPO
+dependencies: []
+repo: https://github.com/GITHUB_USER/GITHUB_REPO
+support: https://github.com/GITHUB_USER/GITHUB_REPO/issues
+port: 8420
+gallery: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+submitter: FinTerm
+submission: https://github.com/GITHUB_USER/GITHUB_REPO
