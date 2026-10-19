@@ -17,7 +17,7 @@ const crypto = require('crypto');
 const dns = require('dns').promises;
 const net = require('net');
 
-const VERSION = '1.2.1';
+const VERSION = '1.2.2';
 const PORT = parseInt(process.env.PORT || '8420', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, '..', 'data'));

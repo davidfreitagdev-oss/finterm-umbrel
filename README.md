@@ -49,7 +49,7 @@ configure-store.ps1            ← doplní GitHub adresu do manifestu
    ```
    (případně ručně nahraďte `GITHUB_USER` a `GITHUB_REPO` v `finterm-terminal/umbrel-app.yml`)
 3. V Umbrelu: **App Store → ⋯ (vpravo nahoře) → Community App Stores** → vložte URL repozitáře → **Add**.
-4. Otevřete obchod **FinTerm** → **Install**. Aplikace poběží na `http://umbrel.local:8420` a je chráněná přihlášením do Umbrelu.
+4. Otevřete obchod **FinTerm** → **Install** (vyžaduje aplikaci **Bitcoin Node**). Aplikace poběží na `http://umbrel.local:8420` a je chráněná přihlášením do Umbrelu.
 
 Aktualizace: změny pushněte na GitHub (se zvýšenou `version` v `umbrel-app.yml`) a v Umbrelu klikněte na *Update*. Data v `finterm-terminal/data` zůstávají.
 
@@ -92,7 +92,7 @@ Výkon: renderování probíhá v prohlížeči klienta, Pi jen servíruje data 
 ## Propojení s Ghostfoliem, Bitcoin uzlem a mempoolem
 
 - **Ghostfolio** – Portfolio → Transakce & zdroje (nebo Nastavení → Propojení): zadejte adresu Ghostfolia a **Security Token** (Ghostfolio → Settings). Na Umbrelu je Ghostfolio za přihlášením Umbrelu, proto FinTerm automaticky použije interní adresu `ghostfolio_server_1:3334`. Synchronizace běží každých 30 minut; token se nikdy neposílá zpět do prohlížeče.
-- **Bitcoin uzel** – na Umbrelu se RPC údaje převezmou automaticky z aplikace Bitcoin Node (`10.21.21.8:8332`). FinTerm volá jen čtecí metody. Ručně: Nastavení → Propojení.
+- **Bitcoin uzel** – FinTerm má v `umbrel-app.yml` závislost na aplikaci Bitcoin Node, takže mu umbrelOS předá RPC údaje (`10.21.21.8:8332`). Bez závislosti je umbrelOS aplikaci nepředá. FinTerm volá jen čtecí metody. Bez uzlu: odeberte závislost `bitcoin` a údaje zadejte ručně v Nastavení → Propojení.
 - **Mempool** – lokální Umbrel mempool (`10.21.21.26:3006`) se najde automaticky, jinak se použije mempool.space.
 
 ## Velikost zobrazení
