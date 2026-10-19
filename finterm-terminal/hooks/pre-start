@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# umbrelOS copies only docker-compose.yml, umbrel-app.yml, exports.sh, *.template and
+# hooks/ when an app is updated – FinTerm's code in app/ is copied on the first install
+# only. Bring app/ in line with the app store checkout before every start, but only when
+# that checkout is the installed version: a plain restart must never deploy code from an
+# update the user hasn't confirmed yet.
+
+APP_ROOT_DIR="${APP_DATA_DIR:-$(readlink -f "$(dirname "${BASH_SOURCE[0]}")/..")}"
+SRC_DIR="${SCRIPT_APP_REPO_DIR:-}"
+
+log() {
+  echo "finterm pre-start: $*"
+}
+
+version_of() {
+  sed -nE 's/^version:[[:space:]]*"?([^"[:space:]]+)"?.*$/\1/p' "$1" 2>/dev/null | head -n 1
+}
+
+if [[ -z "${SRC_DIR}" || ! -f "${SRC_DIR}/app/server.js" ]]; then
+  log "app store checkout not found; keeping installed code"
+  exit 0
+fi
+
+store_version="$(version_of "${SRC_DIR}/umbrel-app.yml")"
+installed_version="$(version_of "${APP_ROOT_DIR}/umbrel-app.yml")"
+
+if [[ -z "${store_version}" || "${store_version}" != "${installed_version}" ]]; then
+  log "app store has ${store_version:-?}, installed is ${installed_version:-?}; keeping installed code"
+  exit 0
+fi
+
+if diff -rq "${SRC_DIR}/app" "${APP_ROOT_DIR}/app" >/dev/null 2>&1; then
+  exit 0
+fi
+
+# Copy in place: app/ is bind-mounted by path, so it has to stay the same directory.
+mkdir -p "${APP_ROOT_DIR}/app"
+cp -a "${SRC_DIR}/app/." "${APP_ROOT_DIR}/app/"
+log "app code synced to ${store_version}"
+
+# Docker may have started the container on its own (e.g. after a power cut) before
+# umbrelOS starts the app – restart it so the new code is actually loaded.
+container="${APP_ID:-finterm-terminal}_web_1"
+if [[ "$(docker inspect --format '{{.State.Running}}' "${container}" 2>/dev/null || true)" == "true" ]]; then
+  docker restart "${container}" >/dev/null && log "restarted ${container}"
+fi

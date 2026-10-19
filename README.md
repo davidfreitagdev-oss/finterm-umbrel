@@ -30,6 +30,7 @@ umbrel-app-store.yml           ← manifest komunitního Umbrel App Store
 finterm-terminal/              ← Umbrel aplikace (id: finterm-terminal)
   umbrel-app.yml
   docker-compose.yml           ← node:22-alpine + app_proxy (přihlášení Umbrelem)
+  hooks/pre-start              ← při aktualizaci nasadí nový kód z app/
   data/                        ← persistentní data (state.json, archiv kalendáře)
   app/
     server.js                  ← backend, Node.js, 0 závislostí
@@ -50,7 +51,9 @@ configure-store.ps1            ← doplní GitHub adresu do manifestu
 3. V Umbrelu: **App Store → ⋯ (vpravo nahoře) → Community App Stores** → vložte URL repozitáře → **Add**.
 4. Otevřete obchod **FinTerm** → **Install**. Aplikace poběží na `http://umbrel.local:8420` a je chráněná přihlášením do Umbrelu.
 
-Aktualizace: změny pushněte na GitHub a v Umbrelu klikněte na *Update*. Data v `finterm-terminal/data` zůstávají.
+Aktualizace: změny pushněte na GitHub (se zvýšenou `version` v `umbrel-app.yml`) a v Umbrelu klikněte na *Update*. Data v `finterm-terminal/data` zůstávají.
+
+> umbrelOS při aktualizaci kopíruje jen `umbrel-app.yml`, `docker-compose.yml`, `exports.sh`, `*.template` a `hooks/`, ne složku `app/`. Kód proto při každém startu dorovná `hooks/pre-start` z kopie obchodu, ale jen pokud verze v obchodě odpovídá nainstalované verzi. Běžný restart tedy nikdy nenasadí aktualizaci, kterou jste ještě nepotvrdili.
 
 > Umbrel při instalaci zkopíruje složku aplikace do `~/umbrel/app-data/finterm-terminal/` a kód z `app/` připojí read-only do oficiálního image `node:22-alpine` (multi-arch, arm64 pro RPi 5). Není potřeba buildovat vlastní Docker image.
 
