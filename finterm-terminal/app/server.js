@@ -17,7 +17,7 @@ const crypto = require('crypto');
 const dns = require('dns').promises;
 const net = require('net');
 
-const VERSION = '1.2.2';
+const VERSION = '1.3.0';
 const PORT = parseInt(process.env.PORT || '8420', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, '..', 'data'));
@@ -1654,6 +1654,61 @@ function saveState(delay = 1000) { clearTimeout(saveTimer); saveTimer = setTimeo
 function flushState() { clearTimeout(saveTimer); saveTimer = null; writeJSONAtomic(STATE_FILE, state); }
 setInterval(() => { try { if (fs.existsSync(STATE_FILE)) fs.copyFileSync(STATE_FILE, STATE_FILE + '.bak'); } catch {} }, 12 * 3600e3).unref();
 
+// ───────────────────────────── portfolio PIN ─────────────────────────────
+// Server-side lock of the private state. Config in its own file, sessions and attempt limits only in memory.
+const PIN_FILE = path.join(DATA_DIR, 'pin.json');
+const PIN_RE = /^\d{4,8}$/;
+const PIN_SCRYPT = { N: 2 ** 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
+const PIN_DEFAULT_MIN = 20;
+const PIN_GATED = /^\/api\/(portfolio(\/|$)|state\/(portfolio|journal|notes)$)/;
+let pinConf = null;    // { salt, hash, minutes } (hex strings)
+let pinBroken = false; // pin.json exists but is unusable → fail closed: counts as set, no PIN passes
+const pinSessions = new Map(); // token → absolute expiry (ms); activity does not extend it
+const pinGuard = { fails: 0, until: 0, busy: false };
+const pinErr = (status, message, extra) => Object.assign(new Error(message), { status, extra });
+const pinValid = pin => typeof pin === 'string' && PIN_RE.test(pin);
+const pinEnabled = () => !!pinConf || pinBroken;
+const pinRetryIn = () => Math.max(0, Math.ceil((pinGuard.until - Date.now()) / 1000));
+const pinToken = req => { const m = String(req.headers.cookie || '').match(/(?:^|;\s*)finterm_pin=([0-9a-f]{64})(?=\s*(?:;|$))/); return m ? m[1] : null; };
+const pinDerive = (pin, salt) => new Promise((ok, fail) => crypto.scrypt(pin, salt, 32, PIN_SCRYPT, (e, key) => (e ? fail(e) : ok(key))));
+async function pinHash(pin, minutes) { const salt = crypto.randomBytes(16); return { salt: salt.toString('hex'), hash: (await pinDerive(pin, salt)).toString('hex'), minutes }; }
+function pinMinutes(v, def) { const m = v == null ? def : v; if (!Number.isInteger(m) || m < 1 || m > 480) throw pinErr(400, 'Délka odemčení musí být celé číslo 1 až 480 minut'); return m; }
+function loadPin() {
+  let txt;
+  try { txt = fs.readFileSync(PIN_FILE, 'utf8'); } catch (e) { if (e.code !== 'ENOENT') { pinBroken = true; log('PIN config unreadable, portfolio stays locked:', e.code || e.message); } return; }
+  try {
+    const j = JSON.parse(txt);
+    if (!/^[0-9a-f]{32}$/.test(j.salt) || !/^[0-9a-f]{64}$/.test(j.hash) || !Number.isInteger(j.minutes) || j.minutes < 1 || j.minutes > 480) throw new Error('invalid');
+    pinConf = { salt: j.salt, hash: j.hash, minutes: j.minutes };
+  } catch { pinBroken = true; log('PIN config corrupted, portfolio stays locked:', PIN_FILE); } // parser messages could quote the file
+}
+// writeJSONAtomic swallows errors: the new config may enter memory only after a confirmed write
+function pinSave(next) { writeJSONAtomic(PIN_FILE, next); if (!dataWritable) throw pinErr(500, 'PIN se nepodařilo uložit – datový adresář není zapisovatelný'); pinConf = next; pinBroken = false; }
+function pinLeft(token) { const exp = token ? pinSessions.get(token) : 0; if (!exp) return 0; const left = exp - Date.now(); if (left <= 0) pinSessions.delete(token); return Math.max(0, left); }
+const pinIsOpen = token => !pinEnabled() || pinLeft(token) > 0;
+function pinStatus(token) { const enabled = pinEnabled(), left = enabled ? pinLeft(token) : 0; return { enabled, open: !enabled || left > 0, remaining: Math.ceil(left / 1000), minutes: pinConf ? pinConf.minutes : PIN_DEFAULT_MIN, retryIn: pinRetryIn() }; }
+function pinIssue(res) {
+  const token = crypto.randomBytes(32).toString('hex'), sec = pinConf.minutes * 60;
+  pinSessions.set(token, Date.now() + sec * 1000);
+  res.setHeader('Set-Cookie', `finterm_pin=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${sec}`);
+  return token;
+}
+// one PIN operation at a time, otherwise parallel requests would get around the attempt limit
+async function pinExclusive(fn) {
+  if (pinGuard.busy) throw pinErr(429, 'Ověření PINu právě probíhá – zkuste to znovu', { retryIn: 1 });
+  pinGuard.busy = true;
+  try { return await fn(); } finally { pinGuard.busy = false; }
+}
+async function pinVerify(pin) {
+  const wait = pinRetryIn();
+  if (wait) throw pinErr(429, `Příliš mnoho pokusů – zkuste to znovu za ${wait} s`, { retryIn: wait });
+  if (pinBroken) throw pinErr(403, 'Konfigurace PINu je poškozená – postup je v README');
+  if (pinValid(pin) && crypto.timingSafeEqual(await pinDerive(pin, Buffer.from(pinConf.salt, 'hex')), Buffer.from(pinConf.hash, 'hex'))) { pinGuard.fails = 0; pinGuard.until = 0; return; }
+  if (++pinGuard.fails >= 5) pinGuard.until = Date.now() + Math.min(30e3 * 2 ** (pinGuard.fails - 5), 15 * 60e3);
+  throw pinErr(403, 'Nesprávný PIN', { retryIn: pinRetryIn() });
+}
+setInterval(() => { const now = Date.now(); for (const [t, exp] of pinSessions) if (exp <= now) pinSessions.delete(t); }, 60e3).unref();
+
 // ───────────────────────────── HTTP server ─────────────────────────────
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json', '.webmanifest': 'application/manifest+json' };
 const staticCache = new Map();
@@ -1787,7 +1842,48 @@ const routes = {
   'POST /api/news/refresh': async () => { cache.forEach((v, k) => { if (k.startsWith('feed:')) cache.delete(k); }); await refreshNews(); return { ok: true, count: newsItems.length }; },
   // since=-1 (or missing) → only returns the current sequence number (client baseline)
   'GET /api/events': async q => { const since = parseInt(q.get('since') ?? '-1', 10); return { last: eventSeq, events: since >= 0 ? events.filter(e => e.id > since) : [] }; },
-  'GET /api/state': async () => ({ ...state, settings: maskSettings(state.settings), _server: { version: VERSION, writable: dataWritable } }),
+  'GET /api/state': async (q, req) => {
+    const _pin = { ...pinStatus(pinToken(req)), stored: ['portfolio', 'journal', 'notes'].filter(k => state[k] != null) }, { portfolio, journal, notes, ...open } = state;
+    return { ...(_pin.open ? state : open), settings: maskSettings(state.settings), _server: { version: VERSION, writable: dataWritable }, _pin };
+  },
+  'GET /api/pin': async (q, req) => pinStatus(pinToken(req)),
+  'POST /api/pin/setup': async (q, req, res) => {
+    const b = (await readJSON(req)) || {};
+    return pinExclusive(async () => {
+      if (pinEnabled()) throw pinErr(409, 'PIN už je nastavený');
+      if (!pinValid(b.pin)) throw pinErr(400, 'PIN musí mít 4 až 8 číslic');
+      pinSave(await pinHash(b.pin, pinMinutes(b.minutes, PIN_DEFAULT_MIN)));
+      return { ok: true, ...pinStatus(pinIssue(res)) };
+    });
+  },
+  'POST /api/pin/unlock': async (q, req, res) => {
+    const b = (await readJSON(req)) || {};
+    return pinExclusive(async () => {
+      if (!pinEnabled()) throw pinErr(409, 'PIN není nastavený');
+      await pinVerify(b.pin);
+      return { ok: true, ...pinStatus(pinIssue(res)) };
+    });
+  },
+  'POST /api/pin/lock': async (q, req, res) => {
+    const t = pinToken(req);
+    if (t) pinSessions.delete(t);
+    res.setHeader('Set-Cookie', 'finterm_pin=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');
+    return { ok: true, ...pinStatus(null) };
+  },
+  'POST /api/pin/change': async (q, req, res) => {
+    const b = (await readJSON(req)) || {};
+    return pinExclusive(async () => {
+      if (!pinEnabled()) throw pinErr(409, 'PIN není nastavený');
+      if (b.newPin == null && b.minutes == null) throw pinErr(400, 'Není co změnit');
+      if (b.newPin != null && !pinValid(b.newPin)) throw pinErr(400, 'Nový PIN musí mít 4 až 8 číslic');
+      const minutes = pinMinutes(b.minutes, pinConf ? pinConf.minutes : PIN_DEFAULT_MIN);
+      await pinVerify(b.pin);
+      if (b.newPin == null) { pinSave({ ...pinConf, minutes }); return { ok: true, ...pinStatus(pinToken(req)) }; }
+      pinSave(await pinHash(b.newPin, minutes));
+      pinSessions.clear();
+      return { ok: true, ...pinStatus(pinIssue(res)) };
+    });
+  },
   'POST /api/notify/test': async () => {
     const r = await notifyAll('FinTerm – test notifikace', 'Pokud vidíte tuto zprávu, notifikace fungují. ✅', { tags: 'white_check_mark' });
     return { results: r, configured: r.length };
@@ -1816,6 +1912,9 @@ async function handle(req, res) {
 
   lastClient = Date.now();
   try {
+    if (PIN_GATED.test(p) && !pinIsOpen(pinToken(req))) return sendJSON(req, res, 423, { error: 'Portfolio je zamčené – zadejte PIN', locked: true });
+    // a cross-site form cannot send JSON without a preflight; no Origin check, app_proxy may rewrite Host
+    if (req.method === 'POST' && p.startsWith('/api/pin/') && !/^application\/json\b/i.test(req.headers['content-type'] || '')) return sendJSON(req, res, 415, { error: 'Content-Type musí být application/json' });
     const stateKey = p.match(/^\/api\/state\/([a-z]+)$/);
     if (stateKey) {
       const key = stateKey[1];
@@ -1823,7 +1922,11 @@ async function handle(req, res) {
       if (req.method === 'GET') return sendJSON(req, res, 200, (key === 'settings' ? maskSettings(state[key]) : state[key]) ?? null);
       if (req.method === 'PUT') {
         const body = await readJSON(req);
-        if (body === null || typeof body !== 'object') return sendJSON(req, res, 400, { error: 'object expected' });
+        if (body === null || typeof body !== 'object' || (key === 'settings' && Array.isArray(body))) return sendJSON(req, res, 400, { error: 'object expected' });
+        if (key === 'settings' && !pinIsOpen(pinToken(req))) { // locked: a new Ghostfolio URL would send the kept token to a foreign host
+          const g = state.settings && state.settings.ghostfolio;
+          if (g) body.ghostfolio = g; else delete body.ghostfolio;
+        }
         state[key] = key === 'settings' ? keepSecrets(body, state.settings) : body;
         saveState();
         if (key === 'settings') cache.forEach((v, k) => { if (k === 'cryptoglobal' || k === 'btcnode' || k.startsWith('mempool:') || k.startsWith('pfa:')) cache.delete(k); });
@@ -1834,18 +1937,19 @@ async function handle(req, res) {
     }
     const fn = routes[`${req.method} ${p}`];
     if (!fn) return sendJSON(req, res, 404, { error: 'unknown endpoint' });
-    const out = await fn(url.searchParams, req);
+    const out = await fn(url.searchParams, req, res);
     return sendJSON(req, res, 200, out);
   } catch (e) {
     const status = e.status && e.status < 500 ? e.status : 502;
     if (status >= 500) log('API error', p, e.message);
-    return sendJSON(req, res, status, { error: e.message || 'error' });
+    return sendJSON(req, res, status, { error: e.message || 'error', ...e.extra });
   }
 }
 
 // ───────────────────────────── boot ─────────────────────────────
 try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) { log('cannot create data dir', DATA_DIR, e.message); }
 loadState();
+loadPin();
 loadArchive();
 loadExt();
 

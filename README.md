@@ -129,6 +129,20 @@ Yahoo Finance (kotace, grafy, vyhledávání), Binance WebSocket, CoinGecko, alt
 - Termíny zasedání centrálních bank jsou uložené v `server.js` (`CB_MEETINGS`) pro 2026–2027; BoJ je orientační – jednou ročně doplňte.
 - Indikátor otevření burz nezohledňuje svátky.
 
+## PIN portfolia
+
+Stránka **Portfolio** (klávesa `7`) se otevře jen po zadání PINu (4–8 číslic). PIN nastavíte při prvním otevření stránky, potom zůstane portfolio odemčené 20 minut od zadání; aktivita okno neprodlužuje. Délku odemčení (5–120 min) a PIN změníte v Nastavení → **Data & systém** → PIN portfolia, vždy po zadání aktuálního PINu. Tlačítko **Zamknout** vedle záložek stránky zamkne portfolio okamžitě.
+
+- Zámek vynucuje server: bez platného odemčení nedostane prohlížeč portfolio, deník ani poznámky. Portfolio a deník se navíc neukládají do `localStorage` prohlížeče a po zamčení se vymažou z paměti stránky. Watchlist, alerty a nastavení zámek nechrání, používají je i ostatní stránky.
+- Serverové úlohy (synchronizace Ghostfolia, vyhodnocování alertů) běží dál i při zamčeném portfoliu.
+- Po pěti chybných pokusech za sebou se zadávání na 30 s zablokuje, každá další chyba dobu zdvojnásobí (nejvýše 15 min).
+- Export zálohy i její import v Nastavení vyžadují odemčené portfolio, údaje Ghostfolia (Nastavení → Propojení) lze měnit jen po odemčení.
+- PIN je uložený jen jako hash (scrypt) v `pin.json` v datovém adresáři, restart serveru portfolio zamkne.
+
+**Zapomenutý PIN:** smažte soubor `~/umbrel/app-data/finterm-terminal/data/pin.json` a restartujte FinTerm. Data portfolia zůstanou zachována a při příštím otevření stránky nastavíte nový PIN. Poškozený `pin.json` portfolio nechá zamčené a řeší se stejně.
+
+**Data na disku nejsou šifrovaná.** PIN chrání přístup přes aplikaci, ne soubory: kdo má přístup k Umbrelu (SSH, záloha `app-data`), přečte `state.json` i bez PINu.
+
 ## Záloha
 
 Nastavení → **Data & systém** → Export JSON. Na serveru: `finterm-terminal/data/state.json` (+ automatická záloha `state.json.bak` každých 12 h).

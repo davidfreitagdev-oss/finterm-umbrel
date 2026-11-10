@@ -560,8 +560,11 @@ const API = {
         headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
         body: body !== undefined ? JSON.stringify(body) : undefined,
       });
-      const j = await r.json().catch(() => null);
-      if (!r.ok) throw new Error((j && j.error) || 'HTTP ' + r.status);
+      const j = await r.json().catch(e => { if (r.ok) throw e; return null; }); // an OK response with an unreadable body is a failure, never "empty"
+      if (!r.ok) {
+        if (r.status === 423) Pin.denied();
+        throw Object.assign(new Error((j && j.error) || 'HTTP ' + r.status), { status: r.status });
+      }
       return j;
     } catch (e) {
       if (e.name === 'AbortError') throw new Error('timeout');
@@ -666,47 +669,238 @@ const DEF = {
   links: { apps: null },
 };
 
+// Private keys live only on the server behind the PIN. Invariant: empty defaults must never overwrite the server,
+// so a private key is sent only if it was really loaded in the current unlock (Store.fresh).
+const PRIVATE = ['portfolio', 'journal'];
 const Store = {
-  d: {}, server: false, writable: true, dirty: new Set(), timer: null,
+  d: {}, server: false, writable: true, dirty: new Set(), timer: null, fresh: new Set(), epoch: 0, legacy: {}, flushing: Promise.resolve(), queued: null,
+  // private data is never written to localStorage; legacy holds copies left by older versions, kept verbatim until the server certainly has them
+  saveLocal() { try { const o = { ...this.d }; PRIVATE.forEach(k => delete o[k]); localStorage.setItem('finterm.state', JSON.stringify(Object.assign(o, this.legacy))); } catch {} },
+  ready() { return PRIVATE.every(k => this.fresh.has(k)); },
   async load() {
     let local = {};
     try { local = JSON.parse(localStorage.getItem('finterm.state') || '{}') || {}; } catch {}
+    for (const k of [...PRIVATE, 'notes']) if (local[k] != null) { this.legacy[k] = local[k]; delete local[k]; }
     try {
+      if (Pin.owed) await Pin.deliver().catch(() => {}); // a lock made while the server was unreachable goes first
       const s = await API.get('api/state', 8000);
       this.server = true;
       this.writable = s._server ? s._server.writable !== false : true;
-      delete s._server;
+      Pin.set(s._pin);
+      const locked = Pin.locked(), stored = (s._pin && s._pin.stored) || []; // when locked, a private key is missing because of the lock, not because it does not exist
+      delete s._server; delete s._pin; delete s.notes; delete this.legacy.notes; // notes: PIN-gated on the server, the UI has never written them
+      for (const k of PRIVATE) { if (s[k] != null || stored.includes(k)) delete this.legacy[k]; if (locked) delete s[k]; }
       this.d = s;
-      for (const k of Object.keys(DEF)) if (this.d[k] == null && local[k] != null) { this.d[k] = local[k]; this.dirty.add(k); }
+      for (const k of Object.keys(DEF)) {
+        const src = PRIVATE.includes(k) ? (locked ? null : this.legacy[k]) : local[k];
+        if (this.d[k] == null && src != null) { this.d[k] = src; this.dirty.add(k); }
+      }
+      if (!locked) PRIVATE.forEach(k => this.fresh.add(k));
     } catch { this.server = false; this.d = local; }
     for (const [k, v] of Object.entries(DEF)) this.d[k] = deepMerge(clone(v), this.d[k] || {});
-    if (this.dirty.size) this.flush();
+    if (this.dirty.size) this.flush(); // not awaited: a hanging PUT must not block the start, a migrated copy goes after its PUT succeeded
+    this.saveLocal();
   },
   set(k, v) {
     if (v !== undefined) this.d[k] = v;
     this.dirty.add(k);
     clearTimeout(this.timer);
     this.timer = setTimeout(() => this.flush(), 700);
-    try { localStorage.setItem('finterm.state', JSON.stringify(this.d)); } catch {}
+    this.saveLocal();
   },
-  async flush() {
-    const keys = [...this.dirty];
-    this.dirty.clear();
-    if (!this.server) return;
-    for (const k of keys) {
-      try { const r = await API.put('api/state/' + k, this.d[k]); this.writable = r.writable !== false; }
-      catch (e) { this.dirty.add(k); toast('Uložení na server selhalo: ' + esc(e.message), 'err'); }
+  // one run at a time, so no key is taken by an older run; a run that has not started yet also covers later callers
+  // returns true when something queued at the call did not reach the server
+  flush() {
+    if (this.queued) return this.queued;
+    const run = this.queued = this.flushing.then(() => { this.queued = null; return this.sendDirty(); });
+    this.flushing = run.catch(() => {});
+    return run;
+  },
+  async sendDirty() {
+    if (!this.server) { this.dirty.clear(); return false; }
+    const retry = [];
+    let refused = false;
+    for (const k of [...this.dirty].sort((a, b) => PRIVATE.includes(b) - PRIVATE.includes(a))) { // private keys first: Zamknout must not lose them behind a hanging PUT
+      this.dirty.delete(k);
+      if (PRIVATE.includes(k) && !this.fresh.has(k)) { refused = true; continue; } // holds defaults only, must not reach the server
+      try {
+        const r = await API.put('api/state/' + k, this.d[k]);
+        this.writable = r.writable !== false;
+        if (this.legacy[k] != null) { delete this.legacy[k]; this.saveLocal(); }
+      } catch (e) {
+        if (e.status === 423) refused = true;
+        else { retry.push(k); toast('Uložení na server selhalo: ' + esc(e.message), 'err'); }
+      }
     }
+    retry.forEach(k => this.dirty.add(k));
+    if (refused) toast('Změna nebyla uložena – portfolio je zamčené.', 'err');
+    return refused || retry.length > 0;
   },
+  // before the session ends: waits for the running flush and sends the rest, at most ms
+  async drain(ms = 5000) { await Promise.race([this.flush(), new Promise(r => setTimeout(r, ms))]); },
   async refresh(k) {
     if (!this.server || this.dirty.has(k)) return this.d[k];
     try { const v = await API.get('api/state/' + k); if (v) this.d[k] = deepMerge(clone(DEF[k]), v); } catch {}
     return this.d[k];
   },
+  async loadPrivate() {
+    const ep = this.epoch, vals = await Promise.all(PRIVATE.map(k => API.get('api/state/' + k)));
+    if (ep !== this.epoch) throw new Error('zamčeno'); // locked while loading: the data must not come back
+    let tidy = false;
+    PRIVATE.forEach((k, i) => {
+      const copy = this.legacy[k]; // server has no such key + copy from an older version → it goes up now
+      this.d[k] = deepMerge(clone(DEF[k]), vals[i] || copy || {});
+      this.fresh.add(k);
+      if (copy != null) { if (vals[i] == null) this.dirty.add(k); else { delete this.legacy[k]; tidy = true; } }
+    });
+    if (tidy) this.saveLocal();
+    if (this.dirty.size) this.flush();
+  },
+  dropPrivate() { this.epoch++; PRIVATE.forEach(k => { this.d[k] = clone(DEF[k]); this.dirty.delete(k); this.fresh.delete(k); }); },
 };
 const S = () => Store.d.settings;
 const L = () => Store.d.layout;
 const saveLayout = debounce(() => Store.set('layout'), 400);
+
+/* ───────── PIN lock of the portfolio (enforced by the server, this is the UI side) ───────── */
+const Pin = {
+  st: { enabled: false, open: true, remaining: 0, minutes: 20, retryIn: 0 }, at: 0, timer: null, warnT: null, rq: null, asking: null, rev: 0,
+  MINUTES: [5, 10, 20, 30, 60, 120],
+  channel: (() => { try { return new BroadcastChannel('finterm-pin'); } catch { return null; } })(), // tells other tabs about lock, unlock and PIN changes
+  get owed() { try { return localStorage.getItem('finterm.pinLockOwed') === '1'; } catch { return false; } }, // a lock the server has not confirmed yet; localStorage is the only copy, shared by all tabs
+  setOwed(v) { try { if (v) localStorage.setItem('finterm.pinLockOwed', '1'); else localStorage.removeItem('finterm.pinLockOwed'); } catch {} },
+  deliver() { return API.req('POST', 'api/pin/lock', {}, 8000).then(s => { this.setOwed(false); return s; }); },
+  announce(kind = 'pin') { try { if (this.channel) this.channel.postMessage(kind); } catch {} },
+  // another tab locked, unlocked or changed the PIN: an answer still on its way is stale, a new one is needed
+  heard(kind) { this.rev++; this.rq = null; if (kind === 'lock') this.denied(); this.refresh(); },
+  locked() { return this.st.enabled && !this.st.open; },
+  left() { return Math.max(0, Math.ceil(this.st.remaining - (performance.now() - this.at) / 1000)); },
+  text() {
+    if (!this.st.enabled) return 'PIN není nastaven';
+    if (!this.st.open) return 'Zamčeno';
+    const s = this.left();
+    return `Odemčeno · zbývá ${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  },
+  paint() {
+    for (const id of ['#pf-pin-st', '#st-pin-st']) { const el = $(id); if (el) el.textContent = this.text(); }
+    if (!$('#st-gf-sync')) return; // Settings → Propojení: while locked the server ignores Ghostfolio changes
+    $$('[data-s^="ghostfolio."], #st-gf-sync').forEach(el => { el.disabled = this.locked(); });
+    $('#st-gf-lock').hidden = !this.locked();
+  },
+  // takes a status from the server; the countdown measures from it on the monotonic clock, the client's wall clock is not used
+  set(s) {
+    if (s) this.st = this.owed && s.enabled ? { ...s, open: false, remaining: 0 } : s;
+    this.at = performance.now();
+    this.rev++;
+    clearTimeout(this.timer); clearTimeout(this.warnT);
+    if (this.st.enabled && this.st.open) {
+      this.timer = setTimeout(() => this.refresh(), this.st.remaining * 1000 + 500);
+      if (this.st.remaining > 60) this.warnT = setTimeout(() => { if (App.page === 'portfolio' && Pages.portfolio.mounted) toast('Portfolio se za minutu zamkne – rozepsané změny uložte.', 'warn', { ms: 15000 }); }, (this.st.remaining - 60) * 1000);
+    }
+    this.paint();
+  },
+  // asks the server, which decides even after an outage; an answer sent before a newer status is stale and dropped
+  refresh() {
+    if (!Store.server) return Promise.resolve();
+    if (this.rq) return this.rq;
+    const rev = this.rev, ask = this.owed ? this.deliver() : API.get('api/pin', 8000);
+    const rq = this.rq = ask.then(s => { if (rev === this.rev) return this.apply(s); })
+      .catch(() => { if (this.st.enabled && this.st.open && !this.left()) this.denied(); }) // no answer at the end of the window: fail closed
+      .finally(() => { if (this.rq === rq) this.rq = null; });
+    return rq;
+  },
+  async apply(s) {
+    const wasLocked = this.locked(), wasEnabled = this.st.enabled;
+    this.set(s);
+    if (this.locked()) { if (!wasLocked) this.wipe(); return; }
+    if (Store.ready() && wasEnabled === this.st.enabled) return;
+    if (!Store.ready()) await Store.loadPrivate();
+    if (App.page === 'portfolio') Pages.portfolio.show();
+  },
+  wipe() { Store.dropPrivate(); Pages.portfolio.unmount(); if (App.page === 'portfolio') Pages.portfolio.show(); },
+  denied() { if (this.locked()) return; this.set({ ...this.st, enabled: true, open: false, remaining: 0 }); this.wipe(); },
+  async lock() {
+    await Store.drain(); // pending edits must reach the server while the session is still valid
+    this.setOwed(true); // locks at once in every tab of this browser; until the server confirms, every status counts as locked
+    this.denied();
+    this.announce('lock');
+    let s;
+    try { s = await this.deliver(); } catch { toast('Server není dostupný – portfolio je zamčené v celém tomto prohlížeči, na serveru se zámek dokončí po jeho návratu.', 'warn'); return; }
+    await this.apply(s);
+  },
+  // true when the private data is available (no PIN or unlocked), otherwise asks for the PIN in a modal window
+  async ensure() {
+    if (!Store.server) { toast('Server FinTerm není dostupný – data portfolia nejsou k dispozici.', 'warn'); return false; }
+    await this.refresh();
+    if (!this.locked()) {
+      if (Store.ready()) return true;
+      try { await Store.loadPrivate(); return true; } catch (e) { toast('Data portfolia se nepodařilo načíst: ' + esc(e.message), 'err'); return false; }
+    }
+    return this.asking || (this.asking = new Promise(done => {
+      const m = modal('PIN portfolia', '', { size: 'narrow', onClose: () => done(false) });
+      this.form(m.body, false, () => { done(true); m.close(); if (App.page === 'portfolio') Pages.portfolio.show(); });
+    }).finally(() => { this.asking = null; }));
+  },
+  minuteOpts(cur) { return [...new Set([...this.MINUTES, cur])].sort((a, b) => a - b).map(m => `<option value="${m}" ${m === cur ? 'selected' : ''}>${m} min</option>`).join(''); },
+  pinField(attr, label, extra = '') { return `<label class="f">${label}<input class="in" ${attr} type="password" inputmode="numeric" autocomplete="off" maxlength="8" ${extra}></label>`; },
+  // unlock form (or first-time setup) rendered into el; onDone runs after the private data has been loaded
+  form(el, setup, onDone) {
+    el.innerHTML = `<div class="col">${this.pinField('data-pin="pin"', setup ? 'PIN (4–8 číslic)' : 'PIN', 'autofocus')}${setup ? this.pinField('data-pin="again"', 'Potvrzení PINu') + `<label class="f">Délka odemčení<select class="in" data-pin="min">${this.minuteOpts(20)}</select></label>` : ''}<div class="note dn" data-pin="err" hidden></div><button class="btn pri" data-pin="go" style="justify-content:center">${setup ? 'Nastavit PIN' : 'Odemknout'}</button></div>`;
+    const q = k => $(`[data-pin="${k}"]`, el), inputs = $$('input', el), err = q('err'), btn = q('go');
+    let busy = false, accepted = false; // accepted: the server took the PIN, only loading the data is left
+    const fail = msg => { inputs.forEach(i => { i.value = ''; }); err.textContent = msg; err.hidden = false; if (accepted) btn.textContent = 'Načíst znovu'; inputs[0].focus(); };
+    const submit = async () => {
+      if (busy) return;
+      const pin = q('pin').value;
+      if (!accepted) {
+        if (!/^\d{4,8}$/.test(pin)) return fail('PIN musí mít 4 až 8 číslic.');
+        if (setup && pin !== q('again').value) return fail('PIN a potvrzení se neshodují.');
+      }
+      busy = true; btn.disabled = true; err.hidden = true;
+      let pre = '';
+      try {
+        if (!accepted) { const r = await API.post(setup ? 'api/pin/setup' : 'api/pin/unlock', setup ? { pin, minutes: +q('min').value } : { pin }); this.setOwed(false); this.set(r); accepted = true; this.announce(); } // a new session replaces the one an owed lock was meant for
+        pre = 'Data portfolia se nepodařilo načíst: ';
+        await Store.loadPrivate();
+        onDone();
+      } catch (e) {
+        if (setup && e.status === 409) { await this.refresh(); if (!this.st.enabled) fail(e.message); return; } // the PIN exists already (lost answer, another device): the status brings the unlock form
+        fail(pre + e.message);
+      } finally { busy = false; btn.disabled = false; }
+    };
+    btn.onclick = submit;
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); submit(); } });
+    if (!$$('#modal-root .ov').length || el.closest('.modal')) inputs[0].focus();
+  },
+  // Settings → Data & systém: status, PIN change and unlock length, always with the current PIN
+  settings(el) {
+    if (!this.st.enabled) { el.innerHTML = '<p class="note">PIN zatím není nastavený – nastavíte ho při prvním otevření stránky <b>Portfolio</b>.</p>'; return; }
+    el.innerHTML = `<div class="mini"><span class="k">Stav</span><span class="v" id="st-pin-st">${esc(this.text())}</span></div>
+      <div class="form" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-top:10px">${this.pinField('data-pc="cur"', 'Aktuální PIN')}${this.pinField('data-pc="new"', 'Nový PIN (nepovinné)')}${this.pinField('data-pc="again"', 'Potvrzení nového PINu')}<label class="f">Délka odemčení<select class="in" data-pc="min">${this.minuteOpts(this.st.minutes)}</select></label></div>
+      <div class="row" style="margin-top:10px"><button class="btn" data-pc="save">Uložit změny PINu</button><span class="note" data-pc="msg"></span></div>
+      <p class="note" style="margin-top:8px">Každá změna vyžaduje aktuální PIN. Změna PINu odhlásí ostatní zařízení, nová délka odemčení platí od příštího odemčení.</p>`;
+    const q = k => $(`[data-pc="${k}"]`, el), msg = q('msg');
+    const say = (t, cls) => { msg.className = 'note ' + cls; msg.textContent = t; };
+    const clear = () => ['cur', 'new', 'again'].forEach(k => { q(k).value = ''; });
+    q('save').onclick = async () => {
+      const pin = q('cur').value, newPin = q('new').value, again = q('again').value, minutes = +q('min').value;
+      clear();
+      if (!/^\d{4,8}$/.test(pin)) return say('Zadejte aktuální PIN (4 až 8 číslic).', 'dn');
+      if (newPin && !/^\d{4,8}$/.test(newPin)) return say('Nový PIN musí mít 4 až 8 číslic.', 'dn');
+      if (newPin && newPin !== again) return say('Nový PIN a potvrzení se neshodují.', 'dn');
+      if (!newPin && minutes === this.st.minutes) return say('Není co změnit.', 'amber');
+      q('save').disabled = true;
+      try {
+        const r = await API.post('api/pin/change', { pin, ...(newPin ? { newPin } : {}), ...(minutes !== this.st.minutes ? { minutes } : {}) });
+        if (newPin) this.setOwed(false); // a PIN change ended all sessions and issued a new one
+        await this.apply(r).catch(() => {});
+        this.announce();
+        say('Uloženo.', 'up');
+      } catch (e) { say(e.message, 'dn'); }
+      finally { q('save').disabled = false; }
+    };
+  },
+};
 
 /* ───────── source status ───────── */
 const SRC = { server: { n: 'SERVER' }, quotes: { n: 'KOTACE' }, ws: { n: 'KRYPTO WS' }, news: { n: 'ZPRÁVY' }, cal: { n: 'KALENDÁŘ' }, macro: { n: 'MAKRO' } };
@@ -1410,9 +1604,9 @@ const Cmd = {
     if (fn === 'DES' || fn === 'Q') return openDES(sym);
     if (fn === 'GP') return openDES(sym, 'chart');
     if (fn === 'N') { go('news', 'live'); setTimeout(() => Pages.news.search(sym.n !== sym.k ? sym.n : sym.l), 50); return; }
-    if (fn === 'ALRT') { go('portfolio', 'alerts'); setTimeout(() => Pages.portfolio.prefillAlert(sym.y), 80); return; }
+    if (fn === 'ALRT') { Pages.portfolio.whenOpen(() => Pages.portfolio.prefillAlert(sym.y)); go('portfolio', 'alerts'); return; }
     if (fn === 'WL') { addToWatchlist(sym.y); return; }
-    if (fn === 'PORT') { go('portfolio', 'tx'); setTimeout(() => Pages.portfolio.txModal(null, sym.y), 150); return; }
+    if (fn === 'PORT') { Pages.portfolio.whenOpen(() => Pages.portfolio.txModal(null, sym.y)); go('portfolio', 'tx'); return; }
     if (fn === 'TV') { window.open('https://www.tradingview.com/symbols/' + encodeURIComponent(sym.tv.replace(':', '-')) + '/', '_blank', 'noopener'); return; }
     if ((fn === 'FA' || fn === 'EQRV' || fn === 'VAL') && sym.y) return go('stock', sym.y);
     // a plain stock symbol opens the stock analyzer, anything else the chart
@@ -2355,14 +2549,28 @@ Pages.portfolio = {
   title: 'Portfolio',
   BENCH: [['^GSPC', 'S&P 500'], ['URTH', 'MSCI World'], ['^NDX', 'Nasdaq 100'], ['^GDAXI', 'DAX'], ['BTC-USD', 'Bitcoin']],
   ALLOC: [['holding', 'Pozice'], ['cls', 'Třída'], ['sector', 'Sektor'], ['country', 'Země'], ['currency', 'Měna'], ['account', 'Účet']],
+  mounted: false, gen: 0, gateMode: null, pending: null, sub: null, txMs: new Set(),
+  // one-time wiring only: these are not idempotent, everything rebuilt with the DOM belongs to mount()
   init() {
+    $('#page-portfolio').addEventListener('click', e => { const a = e.target.closest('[data-pf]'); if (!a) return; if (a.dataset.pf === 'add') this.txModal(); if (a.dataset.pf === 'tx') this.tabs.set('tx'); });
+    Bus.on('watchlist', () => { if (App.page === 'portfolio' && this.view === 'watch') this.renderWatch(); });
+    Bus.on('quotes', () => this.onQuotes());
+    Bus.on('live', () => this.onQuotes());
+    Timers.add('pf-reload', 5 * 60e3, () => this.load(true), () => App.page === 'portfolio' && ['overview', 'holdings'].includes(this.view));
+    Timers.add('pf-alerts', 30e3, async () => { await Store.refresh('alerts'); if (this.view === 'alerts') this.renderAlerts(); }, () => App.page === 'portfolio' && this.view === 'alerts');
+    Timers.add('pf-apps', 90e3, () => this.checkApps(), () => App.page === 'portfolio' && this.view === 'apps');
+    Timers.add('pf-spark', 5 * 60e3, () => loadSparks(Store.d.watchlist.items.map(i => i.symbol), $('#wl-table')), () => App.page === 'portfolio' && this.view === 'watch');
+  },
+  // builds the page; runs only after the private data has been loaded
+  mount() {
+    this.gateMode = null;
     this.migrate();
     this.base = S().baseCurrency || 'CZK';
     this.bench = Store.d.portfolio.bench || '^GSPC';
     this.mode = 'value'; this.range = 'MAX'; this.allocKey = 'holding'; this.fa = {};
     $('#page-portfolio').innerHTML = `
       <div class="subnav"><div class="tabs" data-g="pf"><button class="tab" data-t="overview">Přehled</button><button class="tab" data-t="holdings">Pozice</button><button class="tab" data-t="tx">Transakce & zdroje</button><button class="tab" data-t="watch">Watchlist</button><button class="tab" data-t="alerts">Alerty</button><button class="tab" data-t="journal">Obchodní deník</button><button class="tab" data-t="apps">Umbrel aplikace</button></div>
-        <span class="sp"></span>
+        <span class="sp"></span><span class="card-s mono" id="pf-pin-st"></span><button class="btn sm" id="pf-lock" title="Okamžitě zamknout portfolio">Zamknout</button>
         <div class="row pf-ctl" style="gap:8px"><span class="card-s" id="pf-src"></span><div class="seg" id="pf-base">${['CZK', 'USD', 'EUR'].map(c => `<button data-v="${c}" class="${c === this.base ? 'active' : ''}">${c}</button>`).join('')}</div>
           <select class="in" id="pf-bench" style="height:2.05rem;width:auto" title="Srovnávací index">${this.BENCH.map(([v, l]) => `<option value="${v}">vs ${l}</option>`).join('')}</select>
           <button class="btn sm" id="pf-sync" title="Načíst znovu / synchronizovat s Ghostfoliem">⟳</button></div></div>
@@ -2423,6 +2631,8 @@ Pages.portfolio = {
       <div data-g="pf" data-p="apps"><div class="subnav"><span class="card-s" id="ap-host"></span><span class="sp"></span><button class="btn sm" id="ap-check">⟳ Zkontrolovat stav</button><button class="btn sm" id="ap-edit">Upravit seznam</button></div><div class="grid auto" style="--min:270px" id="ap-grid"></div>
         <p class="note" style="margin-top:12px">Porty odpovídají výchozím portům aplikací v Umbrel App Store – pokud se liší, upravte je. Stav se zjišťuje přímo z prohlížeče (dostupnost portu). Hostitel lze změnit v Nastavení.</p></div>`;
     this.tabs = tabs($('[data-g="pf"].tabs'), t => this.onTab(t), false);
+    $('#pf-lock').onclick = () => Pin.lock();
+    Pin.paint();
     // portfolio controls
     seg($('#pf-base'), v => { this.base = v; this.load(); });
     $('#pf-bench').value = this.bench;
@@ -2431,7 +2641,6 @@ Pages.portfolio = {
     seg($('#pf-mode'), v => { this.mode = v; this.renderChart(); });
     seg($('#pf-range'), v => { this.range = v; this.renderChart(); });
     $('#pf-alloc-t').addEventListener('click', e => { const b = e.target.closest('.tab'); if (!b) return; $$('#pf-alloc-t .tab').forEach(x => x.classList.toggle('active', x === b)); this.allocKey = b.dataset.k; this.renderAlloc(); });
-    $('#page-portfolio').addEventListener('click', e => { const a = e.target.closest('[data-pf]'); if (!a) return; if (a.dataset.pf === 'add') this.txModal(); if (a.dataset.pf === 'tx') this.tabs.set('tx'); });
     $('#pf-hold').addEventListener('click', e => {
       const tr = e.target.closest('tr[data-s]'); if (!tr) return;
       const s = tr.dataset.s, b = e.target.closest('[data-act]');
@@ -2471,7 +2680,6 @@ Pages.portfolio = {
       else if (a === 'note') { const n = prompt('Poznámka k ' + items[i].symbol, items[i].note || ''); if (n === null) return; items[i].note = n; }
       Store.set('watchlist'); this.renderWatch();
     });
-    Bus.on('watchlist', () => { if (App.page === 'portfolio' && this.view === 'watch') this.renderWatch(); });
     // alerts
     symPicker($('#al-sym'), s => this.alertPreview(s));
     $('#al-sym').addEventListener('change', () => this.alertPreview($('#al-sym').value));
@@ -2501,13 +2709,30 @@ Pages.portfolio = {
     // apps
     $('#ap-check').onclick = () => this.checkApps();
     $('#ap-edit').onclick = () => this.editApps();
-    Bus.on('quotes', () => this.onQuotes());
-    Bus.on('live', () => this.onQuotes());
-    Timers.add('pf-reload', 5 * 60e3, () => this.load(true), () => App.page === 'portfolio' && ['overview', 'holdings'].includes(this.view));
-    Timers.add('pf-alerts', 30e3, async () => { await Store.refresh('alerts'); if (this.view === 'alerts') this.renderAlerts(); }, () => App.page === 'portfolio' && this.view === 'alerts');
-    Timers.add('pf-apps', 90e3, () => this.checkApps(), () => App.page === 'portfolio' && this.view === 'apps');
-    Timers.add('pf-spark', 5 * 60e3, () => loadSparks(Store.d.watchlist.items.map(i => i.symbol), $('#wl-table')), () => App.page === 'portfolio' && this.view === 'watch');
+    this.mounted = true;
   },
+  // destroys everything that holds portfolio data; the epoch stops async work still running for the old page
+  unmount() {
+    this.gen++;
+    Q.unsub('pf');
+    [...this.txMs].forEach(m => m.close());
+    if (this.ch) { this.ch.destroy(); this.ch = null; }
+    this.an = this.acts = this.fa = this.view = this.tabs = this.editJ = this._key = null;
+    $('#page-portfolio').innerHTML = '';
+    this.gateMode = null;
+    this.mounted = false;
+  },
+  // lock screen or first-time setup in place of the page
+  gate(mode) {
+    if (this.gateMode === mode) { const i = $('#page-portfolio input'); if (i && !$$('#modal-root .ov').length) i.focus(); return; }
+    this.unmount();
+    this.gateMode = mode;
+    const el = $('#page-portfolio'), setup = mode === 'setup';
+    el.innerHTML = `<div style="display:flex;justify-content:center;padding-top:8vh"><div class="card" style="width:min(400px,100%)"><div class="card-h"><span class="card-t">${setup ? 'Nastavte PIN portfolia' : 'Portfolio je zamčené'}</span></div><div class="card-b"><p class="note mb">${setup ? 'Portfolio a obchodní deník se budou otevírat jen po zadání PINu. Délku odemčení lze později změnit v Nastavení.' : 'Zadejte PIN pro odemčení portfolia.'}</p><div id="pf-pin-form"></div></div></div></div>`;
+    Pin.form($('#pf-pin-form'), setup, () => this.show());
+  },
+  // runs fn on the next show() with the page mounted, i.e. after a possible unlock; register it before go()
+  whenOpen(fn) { this.pending = fn; },
   migrate() {
     const pf = Store.d.portfolio;
     if (!Array.isArray(pf.activities)) pf.activities = [];
@@ -2521,15 +2746,29 @@ Pages.portfolio = {
       setTimeout(() => toast(`Původní pozice (${pf.activities.length}) byly převedeny na transakce – najdete je v záložce Transakce.`, 'info'), 500);
     }
   },
-  show(sub) { this.tabs.set(sub === 'positions' ? 'overview' : sub || L().pfTab || 'overview'); },
-  hide() { Q.unsub('pf'); },
+  // the decision is synchronous from the last known status; the background check catches what another tab did
+  show(sub) {
+    if (sub) this.sub = sub;
+    if (!Store.server) { $('#page-portfolio').innerHTML = '<div class="empty">Portfolio vyžaduje běžící server FinTerm.</div>'; return; }
+    Pin.refresh();
+    if (!Pin.st.enabled) return this.gate('setup');
+    if (!Pin.st.open || !Store.ready()) return this.gate('lock');
+    if (!this.mounted) this.mount();
+    const want = this.sub || L().pfTab || 'overview';
+    this.sub = null;
+    this.tabs.set(want === 'positions' ? 'overview' : want);
+    const fn = this.pending;
+    this.pending = null;
+    if (fn) try { fn(); } catch (e) { console.error(e); }
+  },
+  hide() { Q.unsub('pf'); this.pending = null; this.sub = null; },
   onTab(t) {
     this.view = t; L().pfTab = t; saveLayout();
     $('.pf-ctl').hidden = !['overview', 'holdings'].includes(t);
     if (t === 'overview' || t === 'holdings') this.load();
     if (t === 'tx') { this.renderGf(); this.renderTx(); }
     if (t === 'watch') this.renderWatch();
-    if (t === 'alerts') { Store.refresh('alerts').then(() => this.renderAlerts()); this.renderAlerts(); }
+    if (t === 'alerts') { Store.refresh('alerts').then(() => { if (this.view === 'alerts') this.renderAlerts(); }); this.renderAlerts(); }
     if (t === 'journal') this.renderJournal();
     if (t === 'apps') { this.renderApps(); this.checkApps(); }
   },
@@ -2540,12 +2779,16 @@ Pages.portfolio = {
     this.load(true);
   },
   async load(force) {
+    if (!this.mounted) return;
     if (!Store.server) { $('#pf-ov').innerHTML = '<div class="empty">Portfolio vyžaduje běžící server FinTerm.</div>'; return; }
-    const key = this.base + '|' + this.bench;
+    const key = this.base + '|' + this.bench, g = this.gen;
     if (!force && this.an && this._key === key && Date.now() - this._t < 60e3) { this.renderAll(); return; }
     if (!this.an || this._key !== key) { $('#pf-kpi').innerHTML = '<div class="loading" style="grid-column:1/-1">Počítám portfolio (historické ceny, kurzy, výkonnost)</div>'; }
-    try { this.an = await API.get(`api/portfolio/analysis?base=${this.base}&bench=${encodeURIComponent(this.bench)}`, 120000); this._key = key; this._t = Date.now(); }
-    catch (e) { $('#pf-kpi').innerHTML = `<div class="empty" style="grid-column:1/-1">Analýza selhala: ${esc(e.message)}</div>`; return; }
+    let an;
+    try { an = await API.get(`api/portfolio/analysis?base=${this.base}&bench=${encodeURIComponent(this.bench)}`, 120000); }
+    catch (e) { if (g === this.gen) $('#pf-kpi').innerHTML = `<div class="empty" style="grid-column:1/-1">Analýza selhala: ${esc(e.message)}</div>`; return; }
+    if (g !== this.gen) return;
+    this.an = an; this._key = key; this._t = Date.now();
     this.renderAll();
   },
   renderAll() {
@@ -2701,28 +2944,33 @@ Pages.portfolio = {
     if (!this.an || this.an.empty) return;
     const eq = this.an.holdings.filter(h => h.type === 'EQUITY');
     if (!eq.length) { toast('V portfoliu nejsou žádné akcie k ohodnocení.', 'info'); return; }
-    const btn = $('#pf-eval'); btn.disabled = true;
+    const btn = $('#pf-eval'), g = this.gen; btn.disabled = true;
     eq.forEach(h => { if (!this.fa[h.symbol]) this.fa[h.symbol] = { loading: true }; });
     this.renderHoldings();
     let i = 0, done = 0;
     const work = async () => {
       while (i < eq.length) {
         const h = eq[i++];
+        let r;
         try {
           const d = await API.get('api/fundamentals?s=' + encodeURIComponent(h.symbol), 60000);
           const a = FA.defaults(d, FA.base(d)), c = FA.compute(d, a, null);
-          this.fa[h.symbol] = { fv: c.fair.fv, up: c.fair.up, score: c.S.total };
-        } catch { this.fa[h.symbol] = { err: true }; }
+          r = { fv: c.fair.fv, up: c.fair.up, score: c.S.total };
+        } catch { r = { err: true }; }
+        if (g !== this.gen) return;
+        this.fa[h.symbol] = r;
         done++; btn.textContent = `Ohodnoceno ${done}/${eq.length}`;
         if (this.view === 'holdings') this.renderHoldings();
       }
     };
     await Promise.all([work(), work()]);
+    if (g !== this.gen) return;
     btn.disabled = false; btn.textContent = 'Ohodnotit znovu';
     this.renderHoldings();
   },
   // ── transactions & sources ──
   async renderGf() {
+    if (!this.mounted) return;
     const g = S().ghostfolio || {};
     $('#gf-url').value = g.url || '';
     $('#gf-token').value = g.token || '';
@@ -2742,6 +2990,7 @@ Pages.portfolio = {
     if (!/^https?:\/\//.test(url) || !token) { toast('Zadejte adresu Ghostfolia (http://…) a Security Token.', 'warn'); return; }
     S().ghostfolio = { url, token, autoSync: $('#gf-auto').checked };
     Store.set('settings'); await Store.flush();
+    if (!this.mounted) return;
     const btn = $('#gf-save'); btn.disabled = true; btn.textContent = 'Synchronizuji…';
     try {
       const r = await API.post('api/portfolio/ghostfolio/sync');
@@ -2753,9 +3002,10 @@ Pages.portfolio = {
   async clearExt() {
     if (!confirm('Odpojit Ghostfolio a odstranit synchronizovaná / importovaná data? Ručně zadané transakce zůstanou.')) return;
     S().ghostfolio = { url: '', token: '', autoSync: false }; Store.set('settings'); await Store.flush();
-    await API.post('api/portfolio/external/clear').catch(() => {});
+    const failed = await API.post('api/portfolio/external/clear').then(() => null, e => e);
     this.an = null; this.renderGf(); this.renderTx();
-    toast('Ghostfolio odpojeno', 'info', { ms: 2500 });
+    if (failed) toast('Ghostfolio se nepodařilo odpojit: ' + esc(failed.message), 'err');
+    else toast('Ghostfolio odpojeno', 'info', { ms: 2500 });
   },
   async importFile(file) {
     if (!file) return;
@@ -2768,10 +3018,17 @@ Pages.portfolio = {
       this.an = null; this.renderTx(); this.renderGf();
       toast('Portfolio importováno – přehled najdete v záložce Přehled.', 'ok');
     } catch (e) { st.innerHTML = `<span class="dn">Import selhal: ${esc(e.message)}</span>`; }
-    $('#gf-file').value = '';
+    if (this.mounted) $('#gf-file').value = '';
   },
   async renderTx(local) {
-    if (!local || !this.acts) { try { this.acts = await API.get('api/portfolio/activities'); } catch (e) { $('#tx-table').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; } }
+    if (!this.mounted) return;
+    const g = this.gen;
+    if (!local || !this.acts) {
+      let acts;
+      try { acts = await API.get('api/portfolio/activities'); } catch (e) { if (g === this.gen) $('#tx-table').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+      if (g !== this.gen) return;
+      this.acts = acts;
+    }
     const q = ($('#tx-q').value || '').toLowerCase();
     const list = this.acts.filter(a => !q || JSON.stringify(a).toLowerCase().includes(q)).slice().reverse();
     $('#tx-count').textContent = `${this.acts.length} transakcí`;
@@ -2798,6 +3055,7 @@ Pages.portfolio = {
       </div><label class="f" style="margin-top:10px">Poznámka<input class="in" id="tx-com" value="${esc(a.comment || '')}"></label>
       <div class="note" id="tx-q2" style="margin-top:10px"></div>
       <div class="row" style="margin-top:14px"><span class="sp"></span><button class="btn" id="tx-cancel">Zrušit</button><button class="btn pri" id="tx-save">Uložit</button></div>`, { size: 'narrow' });
+    this.txMs.add(m); m.cleanup.push(() => this.txMs.delete(m));
     const b = m.body;
     const upd = () => { const t = $('#tx-type', b).value, c = t === 'CASH'; $('#tx-sym-l', b).hidden = c; $('#tx-price-l', b).hidden = c; $('#tx-qty-l', b).textContent = c ? 'Částka' : t === 'DIVIDEND' || t === 'INTEREST' || t === 'FEE' ? 'Počet (1 = jednorázová částka)' : 'Počet kusů'; };
     $('#tx-type', b).onchange = upd; upd();
@@ -2822,9 +3080,12 @@ Pages.portfolio = {
       if (!n.date || !n.symbol || !isNum(n.qty) || !isNum(n.price)) { toast('Vyplňte datum, symbol, počet a cenu.', 'warn'); return; }
       const i = list.findIndex(x => x.id === n.id);
       if (i >= 0) list[i] = n; else list.push(n);
-      Store.set('portfolio'); await Store.flush();
+      const g = this.gen;
+      Store.set('portfolio');
+      const bad = await Store.flush();
+      if (g !== this.gen) return; // locked meanwhile: the window is gone and flush reported what was lost
       m.close(); this.an = null; this.renderTx();
-      toast('Transakce uložena', 'ok', { ms: 2000 });
+      if (!bad) toast('Transakce uložena', 'ok', { ms: 2000 });
     };
   },
   async delTx(id) {
@@ -2851,11 +3112,12 @@ Pages.portfolio = {
     s = (s || '').trim().toUpperCase(); if (!s) return;
     try {
       const r = await API.get('api/quotes?s=' + encodeURIComponent(s)), q = r[s];
+      if (!this.mounted) return;
       if (!q) { $('#al-cur').innerHTML = '<span class="dn">Symbol nenalezen</span>'; return; }
       Q.set(s, q);
       $('#al-cur').innerHTML = `${esc(q.name)}: <b>${F.p(q.price)} ${esc(q.currency || '')}</b> (${F.pct(q.changePct)})`;
       if (!$('#al-val').value) $('#al-val').value = q.price;
-    } catch (e) { $('#al-cur').textContent = e.message; }
+    } catch (e) { if (this.mounted) $('#al-cur').textContent = e.message; }
   },
   prefillAlert(y) {
     if (!y) return;
@@ -2909,21 +3171,28 @@ Pages.portfolio = {
     $('#jr-ft').textContent = 'Úprava záznamu'; $('#jr-cancel').hidden = false;
     $('#jr-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
   },
-  saveJournal() {
+  async saveJournal() {
     const j = { id: this.editJ || uid() };
     $$('#page-portfolio [data-j]').forEach(el => { const k = el.dataset.j; j[k] = ['entry', 'exit', 'qty', 'fees'].includes(k) ? numIn(el.value) : el.value.trim(); });
     j.symbol = (j.symbol || '').toUpperCase();
     if (!j.symbol || !isNum(j.entry)) { toast('Vyplňte alespoň symbol a vstupní cenu', 'warn'); return; }
     const list = Store.d.journal.entries, i = list.findIndex(x => x.id === j.id);
     if (i >= 0) list[i] = j; else list.unshift(j);
-    Store.set('journal'); this.resetJournalForm(); this.renderJournal();
-    toast('Záznam uložen', 'ok', { ms: 2500 });
+    const g = this.gen, btn = $('#jr-save');
+    this.resetJournalForm(); this.renderJournal(); // before the wait, so nothing typed meanwhile gets reset
+    Store.set('journal');
+    btn.disabled = true;
+    const bad = await Store.flush();
+    btn.disabled = false;
+    if (g === this.gen && !bad) toast('Záznam uložen', 'ok', { ms: 2500 }); // locked meanwhile: flush reported that the entry was not saved
   },
   jPL(j) { if (!isNum(j.exit) || !isNum(j.entry) || !isNum(j.qty)) return null; return (j.exit - j.entry) * j.qty * (j.side === 'short' ? -1 : 1) - (j.fees || 0); },
   async renderJournal() {
-    const all = Store.d.journal.entries, q = ($('#jr-q').value || '').toLowerCase(), base = S().baseCurrency;
+    if (!this.mounted) return;
+    const g = this.gen, all = Store.d.journal.entries, q = ($('#jr-q').value || '').toLowerCase(), base = S().baseCurrency;
     const list = all.filter(j => !q || JSON.stringify(j).toLowerCase().includes(q));
     let fx = null; try { fx = await Data.fx(); } catch {}
+    if (g !== this.gen) return;
     const closed = all.map(j => ({ j, pl: this.jPL(j) })).filter(x => x.pl != null).map(x => ({ ...x, plB: fxConv(x.pl, x.j.currency || base, base, fx) ?? x.pl }));
     const wins = closed.filter(x => x.plB > 0), losses = closed.filter(x => x.plB < 0);
     const sum = a => a.reduce((s, x) => s + x.plB, 0);
@@ -3425,8 +3694,8 @@ Pages.stock = {
       if (act === 'chart') showChart(resolveSym(y));
       else if (act === 'des') openDES(resolveSym(y));
       else if (act === 'wl') addToWatchlist(y);
-      else if (act === 'alert') { go('portfolio', 'alerts'); setTimeout(() => Pages.portfolio.prefillAlert(y), 80); }
-      else if (act === 'pf') { go('portfolio', 'tx'); setTimeout(() => Pages.portfolio.txModal(null, y), 150); }
+      else if (act === 'alert') { Pages.portfolio.whenOpen(() => Pages.portfolio.prefillAlert(y)); go('portfolio', 'alerts'); }
+      else if (act === 'pf') { Pages.portfolio.whenOpen(() => Pages.portfolio.txModal(null, y)); go('portfolio', 'tx'); }
       else if (act === 'peer') this.open(el.dataset.s);
       else if (act === 'reset') { this.a = FA.defaults(this.d, FA.base(this.d)); this.renderAssume(); this.recalc(); }
       else if (act === 'refresh') this.load(y);
@@ -3696,8 +3965,8 @@ function openDES(sym, tab = 'overview') {
   b.addEventListener('click', e => { const g = e.target.closest('[data-goto-fa]'); if (g) { m.close(); go('stock', g.dataset.gotoFa); } });
   if (y) {
     $('#ds-wl', b).onclick = () => addToWatchlist(y);
-    $('#ds-al', b).onclick = () => { m.close(); go('portfolio', 'alerts'); setTimeout(() => Pages.portfolio.prefillAlert(y), 80); };
-    $('#ds-pf', b).onclick = () => { m.close(); go('portfolio', 'tx'); setTimeout(() => Pages.portfolio.txModal(null, y), 150); };
+    $('#ds-al', b).onclick = () => { m.close(); Pages.portfolio.whenOpen(() => Pages.portfolio.prefillAlert(y)); go('portfolio', 'alerts'); };
+    $('#ds-pf', b).onclick = () => { m.close(); Pages.portfolio.whenOpen(() => Pages.portfolio.txModal(null, y)); go('portfolio', 'tx'); };
     API.get('api/quotes?s=' + encodeURIComponent(y)).then(r => {
       const q = r[y];
       if (!q) { $('#ds-stats', b).innerHTML = '<div class="empty">Kotace nedostupná</div>'; return; }
@@ -3753,6 +4022,7 @@ function openSettings(tab = 'gen') {
       <div class="grp-h" style="margin-top:0">Ghostfolio (portfolio)</div>
       <div class="form" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">${fld('ghostfolio.url', 'Adresa Ghostfolia', 'text', 'placeholder="http://umbrel.local:3334"')}${fld('ghostfolio.token', 'Security Token', 'password', 'autocomplete="off"')}</div>
       <div class="row" style="margin-top:10px">${chk('ghostfolio.autoSync', 'Automaticky synchronizovat každých 30 minut')}<span class="sp"></span><button class="btn" id="st-gf-sync">Synchronizovat teď</button></div>
+      <div class="note amber" id="st-gf-lock" style="margin-top:6px" hidden>Portfolio je zamčené – údaje Ghostfolia lze změnit až po odemčení.</div>
       <div class="note" id="st-gf-res" style="margin-top:6px"></div>
       <div class="grp-h">Vlastní Bitcoin uzel (RPC)</div>
       <p class="note mb">Na Umbrelu se adresa a přihlašovací údaje převezmou automaticky z aplikace <b>Bitcoin Node</b>. Ručně je najdete v Bitcoin Node → <b>Connect</b> → RPC. FinTerm volá jen čtecí metody (stav synchronizace, peery, mempool, odhady poplatků).</p>
@@ -3772,8 +4042,11 @@ function openSettings(tab = 'gen') {
       <div><div class="grp-h" style="margin-top:0">Záloha a obnova</div><div class="col">
         <button class="btn" id="st-exp">⬇ Exportovat všechna data (JSON)</button><label class="btn">⬆ Importovat zálohu (JSON)<input type="file" id="st-imp" accept="application/json,.json" hidden></label>
         <button class="btn danger" id="st-reset">Obnovit výchozí nastavení</button></div>
-        <p class="note" style="margin-top:10px">Data (portfolio, watchlist, alerty, deník, nastavení) jsou uložena na serveru v <code>/data/state.json</code> (Umbrel volume) a sdílí se mezi všemi zařízeními.</p></div></div></div>`, { size: 'wide' });
+        <p class="note" style="margin-top:10px">Data (portfolio, watchlist, alerty, deník, nastavení) jsou uložena na serveru v <code>/data/state.json</code> (Umbrel volume) a sdílí se mezi všemi zařízeními.</p></div></div>
+      <div class="grp-h">PIN portfolia</div><div id="st-pin"></div></div>`, { size: 'wide' });
   const b = m.body;
+  Pin.settings($('#st-pin', b));
+  Pin.paint();
   const getP = p => p.split('.').reduce((o, k) => (o ? o[k] : undefined), s);
   const setP = (p, v) => { const ks = p.split('.'); let o = s; ks.slice(0, -1).forEach(k => { o = o[k] = o[k] || {}; }); o[ks[ks.length - 1]] = v; };
   $$('[data-s]', b).forEach(el => {
@@ -3788,7 +4061,7 @@ function openSettings(tab = 'gen') {
       if (p === 'tapeSpeed') Tape.speed();
       if (p === 'desktopNotify' && val && 'Notification' in window && Notification.permission !== 'granted') Notification.requestPermission();
       if (p === 'locale' || p === 'timezone' || p === 'baseCurrency') { const pg = Pages[App.page]; pg.show && pg.show(); }
-      if (p === 'umbrelHost' && Pages.portfolio._init) Pages.portfolio.renderApps();
+      if (p === 'umbrelHost' && Pages.portfolio.mounted) Pages.portfolio.renderApps();
       if (p === 'mempoolUrl') Data.drop('mempool');
     });
   });
@@ -3798,7 +4071,7 @@ function openSettings(tab = 'gen') {
   $('#st-ntest', b).onclick = async () => { await Store.flush(); Pages.portfolio.testNotify(); };
   $('#st-gf-sync', b).onclick = async () => {
     await Store.flush(); $('#st-gf-res', b).innerHTML = '<span class="loading">Synchronizuji</span>';
-    try { const r = await API.post('api/portfolio/ghostfolio/sync'); $('#st-gf-res', b).innerHTML = `<span class="up">✓ ${r.activities} transakcí, ${r.accounts} účtů · ${esc(r.url)}</span>`; if (Pages.portfolio._init) Pages.portfolio.an = null; }
+    try { const r = await API.post('api/portfolio/ghostfolio/sync'); $('#st-gf-res', b).innerHTML = `<span class="up">✓ ${r.activities} transakcí, ${r.accounts} účtů · ${esc(r.url)}</span>`; if (Pages.portfolio.mounted) Pages.portfolio.an = null; }
     catch (e) { $('#st-gf-res', b).innerHTML = `<span class="dn">${esc(e.message)}</span>`; }
   };
   $('#st-node-test', b).onclick = async () => {
@@ -3844,16 +4117,21 @@ function openSettings(tab = 'gen') {
         `<table class="t compact" style="margin-top:8px"><thead><tr><th class="l">Zdroj</th><th class="l">Stav</th><th>OK</th><th>Chyby</th><th>Naposledy OK</th></tr></thead><tbody>${Object.entries(st.sources).map(([k, h]) => `<tr><td class="l">${esc(k)}</td><td class="l">${h.status === 'ok' ? '<span class="badge live">OK</span>' : `<span class="badge err" title="${esc(h.err || '')}">chyba</span>`}</td><td>${h.ok}</td><td>${h.fail}</td><td class="dim">${h.lastOk ? F.time(h.lastOk, true) : '—'}</td></tr>`).join('')}</tbody></table>`;
     } catch (e) { $('#st-status', b).innerHTML = `<div class="empty">Server nedostupný: ${esc(e.message)}</div>`; }
   };
-  $('#st-exp', b).onclick = () => downloadFile(`finterm-backup-${F.dayKey(Date.now())}.json`, JSON.stringify({ app: 'finterm', version: 1, exported: new Date().toISOString(), data: Store.d }, null, 2), 'application/json');
+  // locked data is not in Store.d: without the PIN the backup would silently lack the portfolio and import could not write it
+  $('#st-exp', b).onclick = async () => { if (await Pin.ensure()) downloadFile(`finterm-backup-${F.dayKey(Date.now())}.json`, JSON.stringify({ app: 'finterm', version: 1, exported: new Date().toISOString(), data: Store.d }, null, 2), 'application/json'); };
   $('#st-imp', b).onchange = async e => {
-    const f = e.target.files[0]; if (!f) return;
+    const inp = e.target, f = inp.files[0]; if (!f) return;
     try {
+      if (!await Pin.ensure()) return;
       const j = JSON.parse(await f.text()), d = j.data || j;
       const keys = Object.keys(DEF).filter(k => d[k]);
       if (!keys.length || !confirm(`Importovat ${keys.join(', ')}? Současná data budou přepsána.`)) return;
+      if (!await Pin.ensure()) return; // the session may have ended while the dialog was open
       keys.forEach(k => { Store.d[k] = deepMerge(clone(DEF[k]), d[k]); Store.dirty.add(k); });
-      await Store.flush(); toast('Záloha importována – načítám znovu', 'ok'); setTimeout(() => location.reload(), 900);
+      if (await Store.flush()) { toast('Import se nepodařilo dokončit – část dat se mohla zapsat. Zkontrolujte je a import případně zopakujte.', 'err'); return; }
+      toast('Záloha importována – načítám znovu', 'ok'); setTimeout(() => location.reload(), 900);
     } catch (err) { toast('Neplatný soubor: ' + esc(err.message), 'err'); }
+    finally { inp.value = ''; } // the same file can be picked again
   };
   $('#st-reset', b).onclick = () => { if (!confirm('Obnovit výchozí nastavení a rozložení? Portfolio, alerty a deník zůstanou.')) return; Store.d.settings = clone(DEF.settings); Store.d.layout = clone(DEF.layout); Store.set('settings'); Store.set('layout'); setTimeout(() => location.reload(), 800); };
   tabs($('[data-g="st"].tabs', b), t => { if (t === 'news') loadFeeds(); if (t === 'data') loadStatus(); }, tab);
@@ -3948,6 +4226,7 @@ function clock() {
   Timers.add('quotes', () => (S().quoteInterval || 15) * 1000 * (S().lite ? 2 : 1), () => Q.poll());
   Timers.add('news', () => (S().newsInterval || 120) * 1000, () => News.load(true), () => ['news', 'market'].includes(App.page));
   Timers.add('events', 15e3, pollEvents, () => Store.server);
+  Timers.add('pin', 60e3, () => Pin.refresh(), () => Store.server && Pin.st.enabled); // also catches a machine waking from sleep and locks from other tabs
   Timers.add('status', 60e3, pollStatus);
   Timers.add('sess', 30e3, renderSessionsHeader);
   let lastRot = Date.now();
@@ -3962,9 +4241,11 @@ function clock() {
   });
   setInterval(() => Timers.tick(), 1000);
   setInterval(clock, 1000); clock();
+  setInterval(() => Pin.paint(), 1000);
   window.addEventListener('hashchange', route);
   window.addEventListener('resize', debounce(() => Tape.speed(), 300));
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) Q.poll(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { Q.poll(); Pin.refresh(); } }); // background timers are throttled
+  if (Pin.channel) Pin.channel.onmessage = e => Pin.heard(e.data);
   ['pointerdown', 'wheel', 'touchstart'].forEach(ev => document.addEventListener(ev, () => { App.lastInput = Date.now(); }, { passive: true }));
   $('#brand').onclick = () => go('market');
   $('#btn-help').onclick = openHelp;
@@ -3981,7 +4262,11 @@ function clock() {
     const t = e.target, typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.isContentEditable;
     if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === '/') { e.preventDefault(); $('#cmd').focus(); }
-    else if (/^[1-8]$/.test(e.key) && !$$('#modal-root .ov').length) go(NAV[+e.key - 1][0]);
+    else if (/^[1-8]$/.test(e.key) && !$$('#modal-root .ov').length) {
+      const pinIn = App.page === 'portfolio' && $('#pf-pin-form input');
+      if (pinIn) pinIn.focus(); // the lock is on screen: the digit starts the PIN (no preventDefault, it lands in the field)
+      else { e.preventDefault(); go(NAV[+e.key - 1][0]); } // preventDefault: the digit must not land in a PIN field that gets focus
+    }
     else if (e.key === '?') openHelp();
     else if (e.key === ',') openSettings();
     else if (/^[a-zA-Z]$/.test(e.key) && !$$('#modal-root .ov').length) $('#cmd').focus();
