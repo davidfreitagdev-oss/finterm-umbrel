@@ -17,7 +17,7 @@ const crypto = require('crypto');
 const dns = require('dns').promises;
 const net = require('net');
 
-const VERSION = '1.3.0';
+const VERSION = '1.3.1';
 const PORT = parseInt(process.env.PORT || '8420', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, '..', 'data'));
@@ -1769,7 +1769,7 @@ const routes = {
     ok: true, version: VERSION, uptime: Math.round((Date.now() - STARTED) / 1000), node: process.version,
     memory: Math.round(process.memoryUsage().rss / 1048576), dataWritable, dataDir: DATA_DIR, cache: cache.size,
     sources: health, time: Date.now(), newsUpdated, archive: Object.keys(archive.events).length,
-    mempool: mempoolBase(), mempoolLocal: !!mempoolLocal, node: !!btcConf(), portfolioSource: ext.source, portfolioSynced: ext.syncedAt,
+    mempool: mempoolBase(), mempoolLocal: !!mempoolLocal, btcNode: !!btcConf(), portfolioSource: ext.source, portfolioSynced: ext.syncedAt,
   }),
   'GET /api/quotes': async q => getQuotes(cleanSymbols(q.get('s'))),
   'GET /api/spark': async q => getSpark(cleanSymbols(q.get('s'), 80), RANGES.has(q.get('range')) ? q.get('range') : '1d', INTERVALS.has(q.get('interval')) ? q.get('interval') : '15m'),

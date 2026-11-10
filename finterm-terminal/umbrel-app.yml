@@ -2,7 +2,7 @@ manifestVersion: 1
 id: finterm-terminal
 category: finance
 name: FinTerm
-version: "1.3.0"
+version: "1.3.1"
 tagline: Bloomberg-style finanční terminál – trhy, kalendář, zprávy, krypto, portfolio
 icon: https://raw.githubusercontent.com/davidfreitagdev-oss/finterm-umbrel/main/finterm-terminal/app/public/icon.svg
 description: >-
@@ -28,10 +28,10 @@ description: >-
 
   Žádné API klíče nejsou potřeba. Data jsou uložena lokálně na vašem Umbrelu.
 releaseNotes: >-
-  Stránku Portfolio teď chrání PIN: nastavíte ho při prvním otevření a po zadání zůstane portfolio odemčené
-  20 minut (délku lze změnit v Nastavení → Data & systém). Zámek vynucuje server, portfolio a deník se už
-  neukládají do prohlížeče. Zapomenutý PIN: smažte ~/umbrel/app-data/finterm-terminal/data/pin.json
-  a restartujte FinTerm.
+  Opravy: našeptávač příkazové řádky už nepadá a zobrazuje návrhy příkazů i symbolů, Nastavení → Data & systém
+  ukazuje skutečnou verzi Node.js místo „false“. Obsahuje vše z 1.3.0: stránku Portfolio chrání PIN, po zadání
+  zůstane portfolio odemčené 20 minut (délku lze změnit v Nastavení → Data & systém). Zapomenutý PIN: smažte
+  ~/umbrel/app-data/finterm-terminal/data/pin.json a restartujte FinTerm.
 developer: FinTerm
 website: https://github.com/davidfreitagdev-oss/finterm-umbrel
 dependencies:
