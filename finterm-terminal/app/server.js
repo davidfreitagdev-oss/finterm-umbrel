@@ -17,7 +17,7 @@ const crypto = require('crypto');
 const dns = require('dns').promises;
 const net = require('net');
 
-const VERSION = '1.3.1';
+const VERSION = '1.4.0';
 const PORT = parseInt(process.env.PORT || '8420', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, '..', 'data'));
@@ -67,16 +67,17 @@ function mark(src, ok, err) {
 
 // ───────────────────────────── cache ─────────────────────────────
 // Memory cache with TTL, in-flight de-duplication and stale-on-error fallback.
+// ttl may be a function of the value (degraded results, e.g. with a stale FX rate, are kept only briefly).
 const cache = new Map();
 const inflight = new Map();
 async function cached(key, ttl, fn, staleMax = 72 * 3600e3) {
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.t < ttl) return hit.v;
+  if (hit && Date.now() - hit.t < (hit.ttl ?? ttl)) return hit.v;
   if (inflight.has(key)) return inflight.get(key);
   const p = (async () => {
     try {
       const v = await fn();
-      cache.set(key, { v, t: Date.now() });
+      cache.set(key, { v, t: Date.now(), ttl: typeof ttl === 'function' ? ttl(v) : ttl });
       return v;
     } catch (e) {
       if (hit && Date.now() - hit.t < staleMax) return hit.v;
@@ -311,12 +312,15 @@ const INTERVALS = new Set(['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '
 function getChart(sym, range = '1mo', interval = '1d') {
   const intraday = /[mh]$/.test(interval) && interval !== '1mo' && interval !== '3mo';
   return cached(`chart:${sym}:${range}:${interval}`, intraday ? 60e3 : 15 * 60e3, async () => {
-    const j = await yahooJSON(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=${range}&interval=${interval}&includePrePost=false`);
+    // daily+ charts carry the split history (closes are split-adjusted; the portfolio re-bases pre-split trades)
+    const j = await yahooJSON(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=${range}&interval=${interval}&includePrePost=false${intraday ? '' : '&events=split'}`);
     const res = j?.chart?.result?.[0];
     if (!res) throw new Error(j?.chart?.error?.description || 'no chart data');
     const q = res.indicators?.quote?.[0] || {};
     const ts = res.timestamp || [];
-    const out = { symbol: res.meta?.symbol || sym, currency: res.meta?.currency, tz: res.meta?.exchangeTimezoneName, meta: chartMetaQuote(res.meta), t: [], o: [], h: [], l: [], c: [], v: [] };
+    const splits = Object.values(res.events?.splits || {}).map(s => ({ t: s.date * 1000, num: +s.numerator, den: +s.denominator }))
+      .filter(s => s.t && s.num > 0 && s.den > 0 && s.num !== s.den).sort((a, b) => a.t - b.t);
+    const out = { symbol: res.meta?.symbol || sym, currency: res.meta?.currency, tz: res.meta?.exchangeTimezoneName, meta: chartMetaQuote(res.meta), t: [], o: [], h: [], l: [], c: [], v: [], splits };
     for (let i = 0; i < ts.length; i++) {
       const c = q.close?.[i];
       if (c == null) continue;
@@ -435,24 +439,111 @@ const TS_KEY = {
   TaxRateForCalcs: 'taxRate', CashDividendsPaid: 'dividends', RepurchaseOfCapitalStock: 'buybacks', OrdinarySharesNumber: 'shares',
   Inventory: 'inventory', WorkingCapital: 'workingCapital', InvestedCapital: 'investedCapital', NetDebt: 'netDebt',
   ResearchAndDevelopment: 'rnd', StockBasedCompensation: 'sbc',
+  // capex fallbacks (some exchanges, e.g. Prague, lack CapitalExpenditure)
+  CapitalExpenditureReported: 'capexRep', PurchaseOfPPE: 'ppeBuy', NetPPEPurchaseAndSale: 'ppeNet',
 };
-// long-term government bond yield per currency (risk-free rate for discounting)
-const RF_SERIES = { USD: 'DGS10', EUR: 'IRLTLT01DEM156N', CZK: 'IRLTLT01CZM156N', GBP: 'IRLTLT01GBM156N', GBp: 'IRLTLT01GBM156N', JPY: 'IRLTLT01JPM156N', CHF: 'IRLTLT01CHM156N', PLN: 'IRLTLT01PLM156N' };
-const RF_NAME = { DGS10: 'US 10Y', IRLTLT01DEM156N: 'DE 10Y (Bund)', IRLTLT01CZM156N: 'CZ 10Y', IRLTLT01GBM156N: 'UK 10Y', IRLTLT01JPM156N: 'JP 10Y', IRLTLT01CHM156N: 'CH 10Y', IRLTLT01PLM156N: 'PL 10Y' };
+// quarterly balance sheet items: debt, cash and equity must come from the same date (D/E, EV, ROE)
+const TS_QUARTERLY = { StockholdersEquity: 'equity', TotalDebt: 'debt', CashAndCashEquivalents: 'cash', CashCashEquivalentsAndShortTermInvestments: 'cashSti' };
+// long-term government bond yield per main currency (risk-free rate for discounting), FRED / OECD monthly series
+const RF_SERIES = {
+  USD: 'DGS10', EUR: 'IRLTLT01DEM156N', CZK: 'IRLTLT01CZM156N', GBP: 'IRLTLT01GBM156N', JPY: 'IRLTLT01JPM156N', CHF: 'IRLTLT01CHM156N', PLN: 'IRLTLT01PLM156N',
+  DKK: 'IRLTLT01DKM156N', SEK: 'IRLTLT01SEM156N', NOK: 'IRLTLT01NOM156N', HUF: 'IRLTLT01HUM156N', ZAR: 'IRLTLT01ZAM156N', ILS: 'IRLTLT01ILM156N',
+  INR: 'INDIRLTLT01STM', AUD: 'IRLTLT01AUM156N', CAD: 'IRLTLT01CAM156N', NZD: 'IRLTLT01NZM156N', KRW: 'IRLTLT01KRM156N', MXN: 'IRLTLT01MXM156N', CLP: 'IRLTLT01CLM156N',
+};
+const RF_NAME = {
+  DGS10: 'US 10Y', IRLTLT01DEM156N: 'DE 10Y (Bund)', IRLTLT01CZM156N: 'CZ 10Y', IRLTLT01GBM156N: 'UK 10Y', IRLTLT01JPM156N: 'JP 10Y', IRLTLT01CHM156N: 'CH 10Y', IRLTLT01PLM156N: 'PL 10Y',
+  IRLTLT01DKM156N: 'DK 10Y', IRLTLT01SEM156N: 'SE 10Y', IRLTLT01NOM156N: 'NO 10Y', IRLTLT01HUM156N: 'HU 10Y', IRLTLT01ZAM156N: 'ZA 10Y', IRLTLT01ILM156N: 'IL 10Y',
+  INDIRLTLT01STM: 'IN 10Y', IRLTLT01AUM156N: 'AU 10Y', IRLTLT01CAM156N: 'CA 10Y', IRLTLT01NZM156N: 'NZ 10Y', IRLTLT01KRM156N: 'KR 10Y', IRLTLT01MXM156N: 'MX 10Y', IRLTLT01CLM156N: 'CL 10Y',
+};
+const RF_FIXED = 4.2; // only when FRED is unreachable
 const yraw = v => (v == null ? null : typeof v === 'object' ? (v.raw ?? null) : v);
+const unitNorm = c => (c === 'GBp' || c === 'GBX' ? ['GBP', 0.01] : c === 'ZAc' ? ['ZAR', 0.01] : c === 'ILA' ? ['ILS', 0.01] : c === 'USX' ? ['USD', 0.01] : [c, 1]);
 
-async function fxFactor(from, to) {
-  if (!from || !to || from === to) return 1;
+// Last good rate of every pair, persisted as { "USD>CZK": { k, t } } with t = time of the data (ČNB fixing, quote),
+// not of its use. Used (flagged stale) when all FX sources fail – never a silent 1 : 1.
+const FX_LAST_FILE = path.join(DATA_DIR, 'fx-last.json');
+const FX_PAIR_RE = /^[A-Z]{3}>[A-Z]{3}$/;
+let fxLast = {}, fxLastTimer = null;
+// a valid entry has a positive rate; a missing or invalid t means "stale, date unknown"
+const fxEntry = e => (e && typeof e === 'object' && Number.isFinite(e.k) && e.k > 0 ? { k: e.k, t: Number.isFinite(e.t) && e.t > 0 ? e.t : null } : null);
+function loadFxLast() {
+  let raw = null, bad = false;
+  try { raw = JSON.parse(fs.readFileSync(FX_LAST_FILE, 'utf8')); } catch (e) { bad = e.code !== 'ENOENT'; }
+  fxLast = {};
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const [key, e] of Object.entries(raw)) { const v = FX_PAIR_RE.test(key) && fxEntry(e); if (v) fxLast[key] = v; else bad = true; }
+  } else if (raw != null) bad = true;
+  // self-repair: unreadable content or invalid entries are dropped and the file rewritten
+  if (bad) { log('fx-last.json: invalid content ignored, the file will be rewritten'); scheduleFxFlush(2000); }
+}
+function flushFxLast() { clearTimeout(fxLastTimer); fxLastTimer = null; writeJSONAtomic(FX_LAST_FILE, fxLast, { track: false }); }
+function scheduleFxFlush(ms) { if (!fxLastTimer) fxLastTimer = setTimeout(flushFxLast, ms); }
+function rememberFx(f, t, k, at) {
+  if (!(k > 0) || !Number.isFinite(k)) return;
+  const key = `${f}>${t}`, prev = fxLast[key], when = Number.isFinite(at) && at > 0 ? at : Date.now();
+  if (prev && prev.t && prev.t > when) return; // never replace newer data with older
+  fxLast[key] = { k, t: when };
+  if (!prev) { clearTimeout(fxLastTimer); fxLastTimer = null; }
+  scheduleFxFlush(prev ? 10 * 60e3 : 2000);
+}
+const fxMinT = (a, b) => (a == null || b == null ? null : Math.min(a, b)); // unknown when either side is unknown
+const fxNewer = (a, b) => (!a ? b : !b ? a : (b.t ?? 0) > (a.t ?? 0) ? b : a);
+// conversion factor from → to: { k, stale, t } with t = time of the data (null = unknown); a stale rate comes from an old ČNB
+// fixing, a stale quote or fx-last.json; throws when no rate exists at all
+async function fxConv(from, to) {
+  if (!from || !to || from === to) return { k: 1, stale: false, t: Date.now() };
+  const [f, fm] = unitNorm(from), [t, tm] = unitNorm(to);
+  if (f === t) return { k: fm / tm, stale: false, t: Date.now() };
+  const unit = x => ({ k: (x.k * fm) / tm, stale: x.stale, t: x.t });
   const fx = await cached('fx', 60e3, getFx).catch(() => null);
-  const r = (fx && fx.rates) || {};
-  if (r[from] && r[to]) return r[from] / r[to];
-  const base = c => (c === 'GBp' || c === 'GBX' ? ['GBP', 0.01] : c === 'ZAc' ? ['ZAR', 0.01] : c === 'ILA' ? ['ILS', 0.01] : c === 'USX' ? ['USD', 0.01] : [c, 1]);
-  const [f, fm] = base(from), [t, tm] = base(to);
-  if (f === t) return fm / tm;
-  const s = `${f}${t}=X`;
-  const q = (await getQuotes([s]))[s];
-  if (q && q.price) return (q.price * fm) / tm;
-  throw new Error(`FX ${from}→${to} nedostupný`);
+  const r = (fx && fx.rates) || {}, st = (fx && fx.stale) || {}, at = (fx && fx.asOf) || {};
+  let best = null;
+  if (r[f] > 0 && r[t] > 0) {
+    best = { k: r[f] / r[t], stale: f in st || t in st, t: fxMinT(at[f], at[t]) };
+    if (!best.stale) { rememberFx(f, t, best.k, best.t); return unit(best); }
+  }
+  const s = `${f}${t}=X`, q = (await getQuotes([s]).catch(() => ({})))[s];
+  if (q && q.price > 0) {
+    const c = { k: q.price, stale: !!q.stale, t: q.time || null };
+    if (!c.stale) { rememberFx(f, t, c.k, c.t); return unit(c); }
+    best = fxNewer(best, c);
+  }
+  const d = fxLast[`${f}>${t}`], inv = fxLast[`${t}>${f}`];
+  if (d) best = fxNewer(best, { k: d.k, stale: true, t: d.t });
+  if (inv) best = fxNewer(best, { k: 1 / inv.k, stale: true, t: inv.t });
+  if (best) return unit(best);
+  throw Object.assign(new Error(`kurz ${from}→${to} není k dispozici (zdroje kurzů nedostupné, uložený kurz neexistuje)`), { fxMissing: true });
+}
+
+// FCF needs capex: Yahoo sometimes reports FreeCashFlow = OperatingCashFlow while CapitalExpenditure is missing (CEZ.PR)
+function fixFcf(x) {
+  if (x.capex == null) {
+    const alt = [['capexRep', 'CapitalExpenditureReported'], ['ppeBuy', 'PurchaseOfPPE'], ['ppeNet', 'NetPPEPurchaseAndSale']].find(([k]) => x[k] != null && x[k] <= 0);
+    if (alt) { x.capex = x[alt[0]]; x.capexSrc = alt[1]; }
+  }
+  if (x.capex != null && x.ocf != null) { if (x.fcf == null || (x.fcf === x.ocf && x.capex !== 0)) x.fcf = x.ocf + x.capex; }
+  else if (x.fcf != null && x.ocf != null && x.fcf === x.ocf) { x.fcf = null; x.fcfNoCapex = true; }
+  delete x.capexRep; delete x.ppeBuy; delete x.ppeNet;
+  return x;
+}
+
+// peers for the relative valuation: same sector, preferably the same industry, at most 5 (profiles cached 24 h).
+// Profiles load in parallel, each waited for at most PEER_WAIT (a slow one finishes in the background and is cached);
+// a failure is reported as peersErr – the caller then caches the fundamentals only briefly.
+const PEER_WAIT = 3000;
+const within = (p, ms) => new Promise((ok, fail) => { const t = setTimeout(() => fail(new Error('timeout')), ms); p.then(v => { clearTimeout(t); ok(v); }, e => { clearTimeout(t); fail(e); }); });
+async function peerFilter(sector, industry, list) {
+  if (!list.length) return { peers: [], peerInfo: [], peersErr: null };
+  const res = await Promise.all(list.map(s => within(profileOf(s), PEER_WAIT).then(p => ({ p }), e => ({ err: e.message || 'chyba' }))));
+  const info = list.map((s, i) => ({ symbol: s, sector: (res[i].p && res[i].p.sector) || null, industry: (res[i].p && res[i].p.industry) || null, failed: !!res[i].err }));
+  const sameInd = info.filter(p => sector && industry && p.sector === sector && p.industry === industry);
+  const sameSec = info.filter(p => sector && p.sector === sector && !sameInd.includes(p));
+  const use = (sameInd.length >= 2 ? sameInd : [...sameInd, ...sameSec]).slice(0, 5);
+  const failed = info.filter(p => p.failed).length;
+  return {
+    peers: use.map(p => p.symbol), peerInfo: info.map(p => ({ ...p, used: use.includes(p), match: sameInd.includes(p) ? 'industry' : sameSec.includes(p) ? 'sector' : null })),
+    peersErr: failed ? (failed === list.length ? 'profily konkurence se nenačetly' : `profil ${failed} z ${list.length} firem se nenačetl`) : null,
+  };
 }
 
 function technicals(ch, rfPct) {
@@ -510,10 +601,11 @@ function technicals(ch, rfPct) {
 }
 
 function getFundamentals(sym) {
-  return cached('fund:' + sym, 6 * 3600e3, async () => {
+  // a degraded result (FX rate missing or stale, peer profiles not loaded) is cached only briefly
+  return cached('fund:' + sym, v => (v.fxErr || v.fxStale || v.peersErr ? 2 * 60e3 : 6 * 3600e3), async () => {
     const mods = 'assetProfile,financialData,defaultKeyStatistics,summaryDetail,price,earningsTrend,recommendationTrend,calendarEvents,earningsHistory';
     const p2 = Math.floor(Date.now() / 1000), p1 = p2 - 7 * 365 * 86400;
-    const types = Object.keys(TS_KEY).flatMap(k => ['annual' + k, 'trailing' + k]).join(',');
+    const types = [...Object.keys(TS_KEY).flatMap(k => ['annual' + k, 'trailing' + k]), ...Object.keys(TS_QUARTERLY).map(k => 'quarterly' + k)].join(',');
     const [qs, ts, ch, pe] = await Promise.all([
       yahooJSON(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=${mods}`),
       yahooJSON(`https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(sym)}?symbol=${encodeURIComponent(sym)}&type=${types}&period1=${p1}&period2=${p2}`).catch(() => null),
@@ -524,15 +616,16 @@ function getFundamentals(sym) {
     if (!r) throw Object.assign(new Error((qs && qs.quoteSummary && qs.quoteSummary.error && qs.quoteSummary.error.description) || 'fundamentální data nejsou k dispozici'), { status: 404 });
     const fd = r.financialData || {}, ks = r.defaultKeyStatistics || {}, sd = r.summaryDetail || {}, pr = r.price || {}, ap = r.assetProfile || {};
     // statements
-    const annualMap = {}, ttm = {}, ttmPrev = {};
+    const annualMap = {}, quarterMap = {}, ttm = {}, ttmPrev = {};
     for (const x of (ts && ts.timeseries && ts.timeseries.result) || []) {
       const typ = x.meta && x.meta.type && x.meta.type[0];
-      const m = typ && typ.match(/^(annual|trailing)(.+)$/);
-      const key = m && TS_KEY[m[2]];
+      const m = typ && typ.match(/^(annual|trailing|quarterly)(.+)$/);
+      const key = m && (m[1] === 'quarterly' ? TS_QUARTERLY : TS_KEY)[m[2]];
       if (!key) continue;
       const arr = (x[typ] || []).filter(v => v && v.reportedValue && v.reportedValue.raw != null).sort((a, b) => a.asOfDate.localeCompare(b.asOfDate));
       if (!arr.length) continue;
       if (m[1] === 'annual') { for (const v of arr) (annualMap[v.asOfDate] = annualMap[v.asOfDate] || { date: v.asOfDate })[key] = v.reportedValue.raw; }
+      else if (m[1] === 'quarterly') { for (const v of arr) (quarterMap[v.asOfDate] = quarterMap[v.asOfDate] || { date: v.asOfDate })[key] = v.reportedValue.raw; }
       else {
         const lastV = arr[arr.length - 1];
         ttm[key] = lastV.reportedValue.raw; ttm.date = ttm.date && ttm.date > lastV.asOfDate ? ttm.date : lastV.asOfDate;
@@ -541,15 +634,23 @@ function getFundamentals(sym) {
         if (prev) ttmPrev[key] = prev.reportedValue.raw;
       }
     }
-    const annual = Object.values(annualMap).sort((a, b) => a.date.localeCompare(b.date)).filter(a => a.revenue != null || a.netIncome != null || a.assets != null);
+    const annual = Object.values(annualMap).sort((a, b) => a.date.localeCompare(b.date)).filter(a => a.revenue != null || a.netIncome != null || a.assets != null).map(fixFcf);
+    fixFcf(ttm);
+    const quarterly = Object.values(quarterMap).sort((a, b) => a.date.localeCompare(b.date)).slice(-8);
     const price = yraw(fd.currentPrice) ?? yraw(pr.regularMarketPrice);
     const currency = pr.currency || sd.currency;
     const finCur = fd.financialCurrency || currency;
-    let fx = 1, fxErr = null;
-    try { fx = await fxFactor(finCur, currency); } catch (e) { fxErr = e.message; }
-    const rfId = RF_SERIES[currency] || 'DGS10';
-    const [rfS, aaaS] = await Promise.all([fred(rfId, isoDate(Date.now() - 500 * 864e5)).catch(() => null), fred('DAAA', isoDate(Date.now() - 120 * 864e5)).catch(() => null)]);
-    const rf = rfS ? rfS[rfS.length - 1][1] : 4.2;
+    // Yahoo quotes some exchanges in a sub-unit (GBp, ZAc, ILA) but market cap, EPS, dividend and statements in the main currency:
+    // valuation runs in the main currency, fx converts the statements (finCur) into it
+    const [mainCur, unit] = unitNorm(currency);
+    let fx = null, fxErr = null, fxStale = null, fxAsOf = null; // fxStale: data time of a stale rate, true when unknown
+    try { const c = await fxConv(finCur, mainCur); fx = c.k; fxAsOf = c.t ?? null; if (c.stale) fxStale = c.t ?? true; } catch (e) { fxErr = e.message; }
+    const rfId = RF_SERIES[mainCur] || 'DGS10';
+    const [rfS, aaaS, peerSel] = await Promise.all([
+      fred(rfId, isoDate(Date.now() - 500 * 864e5)).catch(() => null), fred('DAAA', isoDate(Date.now() - 120 * 864e5)).catch(() => null),
+      peerFilter(ap.sector, ap.industry, (((pe && pe.finance && pe.finance.result && pe.finance.result[0] && pe.finance.result[0].recommendedSymbols) || []).map(x => x.symbol)).filter(s => s !== sym).slice(0, 8)),
+    ]);
+    const rf = rfS ? rfS[rfS.length - 1][1] : RF_FIXED;
     const trend = ((r.earningsTrend && r.earningsTrend.trend) || []).map(x => ({
       period: x.period, end: x.endDate, growth: yraw(x.growth),
       eps: yraw(x.earningsEstimate && x.earningsEstimate.avg), epsLow: yraw(x.earningsEstimate && x.earningsEstimate.low), epsHigh: yraw(x.earningsEstimate && x.earningsEstimate.high),
@@ -559,7 +660,7 @@ function getFundamentals(sym) {
     const cal = r.calendarEvents || {};
     const out = {
       symbol: pr.symbol || sym, name: pr.shortName || pr.longName || sym, longName: pr.longName, type: pr.quoteType, exchange: pr.exchangeName, exchangeName: pr.exchange,
-      currency, finCur, fx, fxErr, price, change: yraw(pr.regularMarketChange), changePct: yraw(pr.regularMarketChangePercent) != null ? yraw(pr.regularMarketChangePercent) * 100 : null,
+      currency, mainCur, unit, finCur, fx, fxErr, fxStale, fxAsOf, price, change: yraw(pr.regularMarketChange), changePct: yraw(pr.regularMarketChangePercent) != null ? yraw(pr.regularMarketChangePercent) * 100 : null,
       marketState: pr.marketState, marketCap: yraw(pr.marketCap) ?? yraw(sd.marketCap),
       profile: { sector: ap.sector, industry: ap.industry, country: ap.country, city: ap.city, employees: ap.fullTimeEmployees, website: ap.website, summary: (ap.longBusinessSummary || '').slice(0, 1600) },
       stats: {
@@ -589,11 +690,12 @@ function getFundamentals(sym) {
         epsEstimate: yraw(cal.earnings && cal.earnings.earningsAverage), revEstimate: yraw(cal.earnings && cal.earnings.revenueAverage),
         history: ((r.earningsHistory && r.earningsHistory.history) || []).map(x => ({ q: yraw(x.quarter) ? yraw(x.quarter) * 1000 : null, period: x.period, actual: yraw(x.epsActual), estimate: yraw(x.epsEstimate), surprise: yraw(x.surprisePercent) != null ? yraw(x.surprisePercent) * 100 : null })),
       },
-      annual, ttm, ttmPrev,
-      rf: { rate: rf, series: rfId, name: RF_NAME[rfId] || rfId, date: rfS ? rfS[rfS.length - 1][0] : null },
+      annual, ttm, ttmPrev, quarterly,
+      // fallback = no FRED series for this currency (US 10Y used instead), fixed = FRED unreachable
+      rf: { rate: rf, series: rfS ? rfId : null, name: rfS ? RF_NAME[rfId] || rfId : 'pevná sazba', date: rfS ? rfS[rfS.length - 1][0] : null, currency: mainCur, fallback: !RF_SERIES[mainCur], fixed: !rfS },
       aaa: aaaS ? aaaS[aaaS.length - 1][1] : null,
       tech: ch && ch.c.length ? technicals(ch, rf) : null,
-      peers: (((pe && pe.finance && pe.finance.result && pe.finance.result[0] && pe.finance.result[0].recommendedSymbols) || []).map(x => x.symbol)).slice(0, 8),
+      peers: peerSel.peers, peerInfo: peerSel.peerInfo, peersErr: peerSel.peersErr,
       updated: Date.now(),
     };
     mark('yahoo', true);
@@ -619,17 +721,33 @@ function getCnbFx() {
   });
 }
 
+// Rates vs CZK with the time of their data (asOf) and stale flags. Per currency: a fresh live quote, else a fresh ČNB fixing,
+// else the newest stale one (old ČNB fixing from the stale-on-error cache, quote that failed to refresh, fx-last.json).
+const CNB_STALE = 4 * 864e5; // a ČNB fixing older than 4 days (weekends, holidays) is stale
 async function getFx() {
-  const cnb = await getCnbFx().catch(e => { mark('cnb', false, e.message); return { rates: { CZK: 1 }, names: {}, date: null }; });
+  const cnb = await getCnbFx().catch(e => { mark('cnb', false, e.message); return null; });
+  const cnbT = cnb && cnb.date ? Date.parse(cnb.date + 'T13:30:00Z') : null; // the fixing is published at 14:30 Prague time
+  const cnbStale = !cnbT || Date.now() - cnbT > CNB_STALE;
   const liveMap = { 'CZK=X': 'USD', 'EURCZK=X': 'EUR', 'GBPCZK=X': 'GBP', 'CHFCZK=X': 'CHF', 'JPYCZK=X': 'JPY', 'PLNCZK=X': 'PLN' };
   const live = await getQuotes(Object.keys(liveMap)).catch(() => ({}));
-  const rates = { ...cnb.rates }, liveList = [];
-  for (const [s, c] of Object.entries(liveMap)) if (live[s]?.price) { rates[c] = live[s].price; liveList.push(c); }
-  if (rates.GBP) rates.GBp = rates.GBX = rates.GBP / 100;
-  if (rates.USD) rates.USX = rates.USD / 100;
-  if (rates.ZAR) rates.ZAc = rates.ZAR / 100;
-  if (rates.ILS) rates.ILA = rates.ILS / 100;
-  return { base: 'CZK', date: cnb.date, rates, live: liveList, names: cnb.names };
+  const cand = {};
+  const add = (c, k, t, stale, src) => { if (k > 0 && Number.isFinite(k)) (cand[c] = cand[c] || []).push({ k, t: t || null, stale, src }); };
+  if (cnb) for (const [c, k] of Object.entries(cnb.rates)) if (c !== 'CZK') add(c, k, cnbT, cnbStale, 'cnb');
+  for (const [s, c] of Object.entries(liveMap)) { const q = live[s]; if (q) add(c, q.price, q.time, !!q.stale, 'live'); }
+  for (const [key, e] of Object.entries(fxLast)) { const [a, b] = key.split('>'); if (b === 'CZK') add(a, e.k, e.t, true, 'saved'); else if (a === 'CZK') add(b, 1 / e.k, e.t, true, 'saved'); }
+  const rank = x => (x.stale ? 0 : x.src === 'live' ? 2 : 1);
+  const rates = { CZK: 1 }, asOf = { CZK: Date.now() }, stale = {}, liveList = [];
+  for (const [c, list] of Object.entries(cand)) {
+    const b = list.reduce((x, y) => (rank(y) > rank(x) || (rank(y) === rank(x) && (y.t ?? 0) > (x.t ?? 0)) ? y : x));
+    rates[c] = b.k; asOf[c] = b.t;
+    if (b.stale) stale[c] = b.t; else if (b.src === 'live') liveList.push(c);
+  }
+  for (const [sub, main] of [['GBp', 'GBP'], ['GBX', 'GBP'], ['USX', 'USD'], ['ZAc', 'ZAR'], ['ILA', 'ILS']]) {
+    if (!rates[main]) continue;
+    rates[sub] = rates[main] / 100; asOf[sub] = asOf[main];
+    if (main in stale) stale[sub] = stale[main];
+  }
+  return { base: 'CZK', date: cnb ? cnb.date : null, cnbStale: !!cnb && cnbStale, rates, live: liveList, names: (cnb && cnb.names) || { CZK: 'Česko – koruna' }, asOf, stale };
 }
 
 function getCnbRepo() {
@@ -824,7 +942,7 @@ function loadArchive() {
 function saveArchive() {
   const cutoff = Date.now() - 500 * 864e5;
   for (const [k, e] of Object.entries(archive.events)) if (e.ts < cutoff) delete archive.events[k];
-  writeJSONAtomic(ARCHIVE_FILE, archive);
+  writeJSONAtomic(ARCHIVE_FILE, archive, { track: false }); // a cache of external data, not user state
 }
 
 function getFF() {
@@ -1340,14 +1458,16 @@ async function ghostfolioSync() {
 const SECTOR_CS = { Technology: 'Technologie', 'Financial Services': 'Finance', Healthcare: 'Zdravotnictví', 'Consumer Cyclical': 'Zbytná spotřeba', 'Consumer Defensive': 'Základní spotřeba', Industrials: 'Průmysl', Energy: 'Energie', Utilities: 'Utility', 'Real Estate': 'Nemovitosti', 'Basic Materials': 'Materiály', 'Communication Services': 'Komunikace' };
 const ETF_SECTOR = { technology: 'Technologie', financial_services: 'Finance', healthcare: 'Zdravotnictví', consumer_cyclical: 'Zbytná spotřeba', consumer_defensive: 'Základní spotřeba', industrials: 'Průmysl', energy: 'Energie', utilities: 'Utility', realestate: 'Nemovitosti', basic_materials: 'Materiály', communication_services: 'Komunikace' };
 const COUNTRY_CS = { 'United States': 'USA', Netherlands: 'Nizozemsko', France: 'Francie', Germany: 'Německo', 'Czech Republic': 'Česko', Czechia: 'Česko', 'United Kingdom': 'Velká Británie', Ireland: 'Irsko', Switzerland: 'Švýcarsko', Taiwan: 'Tchaj-wan', China: 'Čína', Japan: 'Japonsko', Canada: 'Kanada', Denmark: 'Dánsko', Sweden: 'Švédsko', Spain: 'Španělsko', Italy: 'Itálie', Austria: 'Rakousko', Poland: 'Polsko', 'South Korea': 'Jižní Korea', India: 'Indie', Israel: 'Izrael', Brazil: 'Brazílie', Australia: 'Austrálie', Belgium: 'Belgie', Norway: 'Norsko', Finland: 'Finsko', Luxembourg: 'Lucembursko', 'Hong Kong': 'Hongkong', Singapore: 'Singapur' };
-function getProfile(sym) {
+// profileOf throws on errors (peers need to know), getProfile never does (portfolio)
+function getProfile(sym) { return profileOf(sym).catch(() => ({})); }
+function profileOf(sym) {
   return cached('prof:' + sym, 24 * 3600e3, async () => {
     const j = await yahooJSON(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=assetProfile,quoteType,topHoldings,fundProfile`);
     const r = (j && j.quoteSummary && j.quoteSummary.result && j.quoteSummary.result[0]) || {};
     const ap = r.assetProfile || {}, th = r.topHoldings || {}, sw = {};
     for (const o of th.sectorWeightings || []) for (const [k, v] of Object.entries(o)) { const w = yraw(v); if (w > 0) { const n = ETF_SECTOR[k] || k; sw[n] = (sw[n] || 0) + w; } }
-    return { sector: ap.sector || null, country: ap.country || null, sectorWeights: Object.keys(sw).length ? sw : null, category: (r.fundProfile && r.fundProfile.categoryName) || null };
-  }).catch(() => ({}));
+    return { sector: ap.sector || null, industry: ap.industry || null, country: ap.country || null, sectorWeights: Object.keys(sw).length ? sw : null, category: (r.fundProfile && r.fundProfile.categoryName) || null };
+  });
 }
 function etfRegion(name) {
   const n = String(name || '');
@@ -1368,7 +1488,13 @@ function allActivities() {
 }
 
 const CLASS_OF = { EQUITY: 'Akcie', ETF: 'ETF', CRYPTOCURRENCY: 'Krypto', MUTUALFUND: 'Fondy', FUTURE: 'Komodity', CURRENCY: 'Měny', INDEX: 'Index' };
-const unitNorm = c => (c === 'GBp' || c === 'GBX' ? ['GBP', 0.01] : c === 'ZAc' ? ['ZAR', 0.01] : c === 'ILA' ? ['ILS', 0.01] : c === 'USX' ? ['USD', 0.01] : [c, 1]);
+// a daily chart aligned to calendar days: the close of that day, else of the last trading day before it (also for the first
+// portfolio day, e.g. a Saturday – never the first close of the whole series); before the first bar the first close
+function alignDaily(x, days, val = i => x.c[i]) {
+  const pts = x.t.map((ts, i) => [localDate(ts, x.tz || 'UTC'), i]);
+  let j = 0, last = null;
+  return days.map(d => { while (j < pts.length && pts[j][0] <= d) { last = val(pts[j][1]); j++; } return last ?? val(0); });
+}
 function rangeFor(days) { return days <= 360 ? '1y' : days <= 720 ? '2y' : days <= 1800 ? '5y' : days <= 3600 ? '10y' : 'max'; }
 function xirr(flows) {
   if (flows.length < 2 || !flows.some(f => f.v > 0) || !flows.some(f => f.v < 0)) return null;
@@ -1382,7 +1508,7 @@ function xirr(flows) {
 async function portfolioAnalysis(base, bench) {
   const acts = allActivities();
   const key = `pfa:${base}:${bench}:${hash(JSON.stringify(acts.map(a => [a.id, a.date, a.type, a.symbol, a.qty, a.price])))}:${Math.floor(Date.now() / 60e3)}`;
-  return cached(key, 60e3, async () => {
+  return cached(key, v => (v.fx && (v.fx.missing.length || v.fx.stale.length) ? 15e3 : 60e3), async () => {
     const cashAcc = (ext.accounts || []).filter(a => a.balance > 0 && !a.excluded);
     if (!acts.length && !cashAcc.length) return { empty: true, base };
     const today = localDate(Date.now());
@@ -1403,35 +1529,60 @@ async function portfolioAnalysis(base, bench) {
     const lastActPrice = {}, actCur = {};
     for (const a of acts) if (['BUY', 'SELL', 'ITEM', 'LIABILITY'].includes(a.type)) { lastActPrice[a.symbol] = a.price; actCur[a.symbol] = a.currency; }
     const curOf = s => (s.startsWith('CASH:') ? s.slice(5) : (quotes[s] && quotes[s].currency) || (ch[s] && ch[s].currency) || actCur[s] || 'USD');
-    // FX series (to base) for every currency in play
-    const curs = new Set([...syms.map(curOf), ...acts.map(a => a.currency), ...cashAcc.map(a => a.currency)]);
-    const fxArr = {};
-    await Promise.all([...curs].map(async c => {
+    // FX series to base: historical closes, today the current rate. Never 1 : 1 – a currency without any rate stays missing
+    // (its positions are reported, not valued); the persisted last good rate is used with its date (stale)
+    const fxArr = {}, fxInfo = {};
+    const fxSeriesFor = async c => {
+      if (fxArr[c] || fxInfo[c]) return;
       const [cn, cm] = unitNorm(c), [bn, bm] = unitNorm(base), mult = cm / bm;
       if (cn === bn) { fxArr[c] = days.map(() => mult); return; }
+      fxInfo[c] = {};
       let series = null;
       for (const [s, inv] of [[`${cn}${bn}=X`, false], ...(cn === 'USD' ? [[`${bn}=X`, false]] : []), [`${bn}${cn}=X`, true]]) {
         try { const x = await getChart(s, range, '1d'); if (x && x.c.length > 5) { series = { x, inv }; break; } } catch { /* try next */ }
       }
-      const now = await fxFactor(c, base).catch(() => null);
-      if (!series) { fxArr[c] = days.map(() => now || mult); return; }
-      const m = new Map(); series.x.t.forEach((ts, i) => m.set(localDate(ts, series.x.tz || 'UTC'), series.inv ? 1 / series.x.c[i] : series.x.c[i]));
-      let last = null; const firstVal = series.x.c.length ? (series.inv ? 1 / series.x.c[0] : series.x.c[0]) : now;
-      fxArr[c] = days.map((d, i) => { if (m.has(d)) last = m.get(d) * mult; if (i === days.length - 1 && now) return now; return last ?? firstVal * mult; });
-    }));
-    const fxAt = (c, i) => (fxArr[c] ? fxArr[c][i] : 1);
+      const now = await fxConv(c, base).catch(() => null);
+      if (!series && !now) { fxInfo[c] = { missing: true }; return; }
+      if (!series) { fxArr[c] = days.map(() => now.k); fxInfo[c] = now.stale ? { stale: true, asOf: now.t, noHistory: true } : { noHistory: true }; return; }
+      fxArr[c] = alignDaily(series.x, days, i => (series.inv ? 1 / series.x.c[i] : series.x.c[i]) * mult);
+      // today: the current rate; without one the newer of the last close and the saved rate, dated (asOf null = unknown)
+      const lastT = series.x.t[series.x.t.length - 1];
+      if (now && !now.stale) fxArr[c][days.length - 1] = now.k;
+      else if (now && (now.t ?? 0) > lastT) { fxArr[c][days.length - 1] = now.k; fxInfo[c] = { stale: true, asOf: now.t }; }
+      else fxInfo[c] = { stale: true, asOf: lastT };
+    };
+    const curs = new Set([...syms.map(curOf), ...acts.map(a => a.currency), ...cashAcc.map(a => a.currency)]);
+    await Promise.all([...curs].map(fxSeriesFor));
+    const fxMissing = c => !fxArr[c];
+    const fxAt = (c, i) => (fxArr[c] ? fxArr[c][i] : NaN); // never 1: currencies without a rate are skipped below
     // price series aligned to calendar days (carry forward)
     const pxArr = {};
     for (const s of syms) {
       const x = ch[s];
       if (!x || !x.c.length) { const lp = lastActPrice[s] || 0; pxArr[s] = days.map(() => lp); continue; }
-      const m = new Map(); x.t.forEach((ts, i) => m.set(localDate(ts, x.tz || 'UTC'), x.c[i]));
-      let last = null;
-      pxArr[s] = days.map(d => { if (m.has(d)) last = m.get(d); return last ?? x.c[0]; });
+      pxArr[s] = alignDaily(x, days);
       const q = quotes[s];
       if (q && isFinite(q.price)) pxArr[s][days.length - 1] = q.price;
     }
     if (syms.some(s => s.startsWith('CASH:'))) syms.filter(s => s.startsWith('CASH:')).forEach(s => { pxArr[s] = days.map(() => 1); });
+    // splits: a trade entered at the pre-split price (price ≈ split ratio × split-adjusted close of that trading day, or of the
+    // last one before it) is re-based to qty × ratio, price ÷ ratio; trades already adjusted (e.g. by Ghostfolio) match the
+    // adjusted close and stay untouched. Ratios up to 1.25 : 1 (stock dividends) cannot be told from price noise: warning only.
+    const splitAdj = [], splitWarn = [];
+    acts.forEach((a, j) => {
+      const x = ch[a.symbol];
+      if ((a.type !== 'BUY' && a.type !== 'SELL') || !x || !x.splits || !x.splits.length || !(a.price > 0)) return;
+      const later = x.splits.filter(sp => localDate(sp.t, x.tz || 'UTC') > a.date);
+      const ratio = later.reduce((r, sp) => r * sp.num / sp.den, 1), i = days.indexOf(a.date);
+      const [ac, am] = unitNorm(a.currency), [qc, qm] = unitNorm(curOf(a.symbol));
+      if (Math.abs(Math.log(ratio)) < 1e-6 || ac !== qc || i < 0) return;
+      const info = { date: a.date, symbol: a.symbol, type: a.type, qty: a.qty, price: a.price, currency: a.currency, ratio, splits: later.map(sp => ({ date: localDate(sp.t, x.tz || 'UTC'), ratio: `${sp.num}:${sp.den}` })), source: a.source };
+      if (Math.abs(Math.log(ratio)) <= Math.log(1.25) + 1e-9) { splitWarn.push(info); return; }
+      const close = pxArr[a.symbol][i] * qm / am, m = a.price / close, tol = Math.min(Math.log(1.25), Math.abs(Math.log(ratio)) / 2);
+      if (!(close > 0) || Math.abs(Math.log(m / ratio)) > tol || Math.abs(Math.log(m)) < tol) return;
+      acts[j] = { ...a, qty: a.qty * ratio, price: a.price / ratio };
+      splitAdj.push({ ...info, newQty: a.qty * ratio, newPrice: a.price / ratio });
+    });
     // data-quality: trades priced far away from that day's market close
     const warnings = [];
     for (const a of acts) {
@@ -1439,18 +1590,23 @@ async function portfolioAnalysis(base, bench) {
       const i = days.indexOf(a.date), mk = i >= 0 ? pxArr[a.symbol][i] * unitNorm(curOf(a.symbol))[1] / unitNorm(a.currency)[1] : null;
       if (mk > 0 && a.price > 0 && Math.abs(a.price / mk - 1) > 0.25) warnings.push({ date: a.date, symbol: a.symbol, type: a.type, qty: a.qty, price: a.price, market: mk, dev: (a.price / mk - 1) * 100, currency: a.currency, source: a.source });
     }
-    // benchmark
+    // benchmark in base currency with the historical FX series, also when the portfolio holds nothing in its currency
     let bx = null; try { bx = await getChart(bench, range, '1d'); } catch { /* none */ }
-    let bArr = null;
+    let bArr = null, benchErr = null, benchCur = null;
     if (bx && bx.c.length) {
-      const m = new Map(); bx.t.forEach((ts, i) => m.set(localDate(ts, bx.tz || 'UTC'), bx.c[i]));
-      const bc = bx.currency || 'USD';
-      if (!fxArr[bc]) { const k = await fxFactor(bc, base).catch(() => 1); fxArr[bc] = days.map(() => k); }
-      let last = null; bArr = days.map((d, i) => { if (m.has(d)) last = m.get(d); return (last ?? bx.c[0]) * fxAt(bc, i); });
+      benchCur = bx.currency || 'USD';
+      await fxSeriesFor(benchCur);
+      if (fxMissing(benchCur)) benchErr = `kurz ${unitNorm(benchCur)[0]}→${base} není k dispozici`;
+      else bArr = alignDaily(bx, days).map((v, i) => v * fxAt(benchCur, i));
     }
-    // day-by-day replay
+    // positions touching a currency without any rate are left out of everything and reported
+    const fxBadSym = new Set(syms.filter(s => fxMissing(curOf(s)) || acts.some(a => a.symbol === s && fxMissing(a.currency))));
+    const skipAct = a => fxBadSym.has(a.symbol) || fxMissing(a.currency);
+    // fxStale = time of the rate's data, or true when that time is unknown (an fx-last.json entry without t)
+    const fxFlag = c => (fxInfo[c] && fxInfo[c].stale ? { fxStale: fxInfo[c].asOf ?? true, fxAsOf: fxInfo[c].asOf ?? null } : {});
+    // day-by-day replay; liabilities are not investments (net worth only)
     const byDay = {};
-    for (const a of acts) (byDay[a.date] = byDay[a.date] || []).push(a);
+    for (const a of acts) if (a.type !== 'LIABILITY' && !skipAct(a)) (byDay[a.date] = byDay[a.date] || []).push(a);
     const H = {};
     const h = s => H[s] || (H[s] = { qty: 0, costB: 0, costL: 0, boughtB: 0, realized: 0, div: 0, fees: 0, first: null, flows: [], accounts: new Set() });
     let invested = 0, realized = 0, dividends = 0, fees = 0, feeOther = 0, idx = 1, prevV = 0, bUnits = 0, bIdx0 = null;
@@ -1475,7 +1631,6 @@ async function portfolioAnalysis(base, bench) {
           const amt = a.qty * a.price * fx - feeB; x.div += amt; dividends += amt; cf -= amt;
           x.flows.push({ t: ts, v: amt }); flows.push({ t: ts, v: amt });
         } else if (a.type === 'FEE') { const amt = (a.qty * a.price + a.fee) * fx; fees += amt; feeOther += amt; cf += amt; flows.push({ t: ts, v: -amt }); }
-        else if (a.type === 'LIABILITY') { x.qty -= a.qty; x.costB -= amtB; invested -= amtB; cf -= amtB; }
       }
       let v = 0;
       for (const s of syms) { const x = H[s]; if (x && x.qty) v += x.qty * pxArr[s][i] * fxAt(curOf(s), i); }
@@ -1501,7 +1656,7 @@ async function portfolioAnalysis(base, bench) {
     let total = 0, dayChg = 0, projDiv = 0;
     for (const s of syms) {
       const x = H[s];
-      if (!x) continue;
+      if (!x || fxBadSym.has(s)) continue;
       const cur = curOf(s), fxNow = fxAt(cur, li), q = quotes[s] || {}, p = prof[s] || {};
       const price = pxArr[s][li], value = x.qty * price * fxNow;
       if (Math.abs(x.qty) < 1e-9) { if (x.realized || x.div) closed.push({ symbol: s, name: q.name || s, realized: x.realized, dividends: x.div }); continue; }
@@ -1518,14 +1673,39 @@ async function portfolioAnalysis(base, bench) {
         symbol: s, name: s.startsWith('CASH:') ? 'Hotovost ' + cur : q.longName || q.name || (s.startsWith('MANUAL:') ? s.slice(7) : s), type, cls, sector, sectorWeights: sector === null ? p.sectorWeights : null, country, currency: cur,
         accounts: [...x.accounts], qty: x.qty, avg: x.qty ? x.costL / x.qty : null, actCurrency: actCur[s], price, value, cost: x.costB, pl: value - x.costB, plPct: x.costB > 0 ? (value - x.costB) / x.costB * 100 : null,
         dayChange: dayB, dayPct: q.changePct ?? null, realized: x.realized, dividends: x.div, fees: x.fees, first: x.first, irr, divYield: dy, projDiv: pdiv, noQuote: !s.startsWith('CASH:') && !s.startsWith('MANUAL:') && !quotes[s],
+        ...fxFlag(cur),
       });
       total += value; dayChg += dayB; projDiv += pdiv;
     }
+    // FX problems per currency: positions left out (missing) or valued with an old rate (stale)
+    const fxMiss = {};
+    const addMiss = (c, s) => (fxMiss[c] = fxMiss[c] || new Set()).add(s);
+    for (const s of fxBadSym) [curOf(s), ...acts.filter(a => a.symbol === s).map(a => a.currency)].filter(fxMissing).forEach(c => addMiss(c, s));
+    for (const a of acts) if (fxMissing(a.currency) && !fxBadSym.has(a.symbol)) addMiss(a.currency, a.symbol);
     let cashTotal = 0;
     for (const a of cashAcc) {
-      const k = await fxFactor(a.currency, base).catch(() => 1), value = a.balance * k;
-      holdings.push({ symbol: 'CASH:' + a.currency, name: `Hotovost – ${a.name}`, type: 'CASH', cls: 'Hotovost', sector: 'Hotovost', country: 'Hotovost', currency: a.currency, accounts: [a.name], qty: a.balance, avg: 1, price: 1, value, cost: value, pl: 0, plPct: 0, dayChange: 0, dividends: 0, realized: 0, first: null, cash: true });
+      if (fxMissing(a.currency)) { addMiss(a.currency, `CASH:${a.currency} (${a.name})`); continue; }
+      const value = a.balance * fxAt(a.currency, li);
+      holdings.push({ symbol: 'CASH:' + a.currency, name: `Hotovost – ${a.name}`, type: 'CASH', cls: 'Hotovost', sector: 'Hotovost', country: 'Hotovost', currency: a.currency, accounts: [a.name], qty: a.balance, avg: 1, price: 1, value, cost: value, pl: 0, plPct: 0, dayChange: 0, dividends: 0, realized: 0, first: null, cash: true, ...fxFlag(a.currency) });
       cashTotal += value; total += value;
+    }
+    // liabilities (LIABILITY, e.g. a loan): outside TWR, XIRR, ROAI, risk and allocation; net worth = value − liabilities
+    const liabilities = [];
+    let liabTotal = 0;
+    for (const s of [...new Set(acts.filter(a => a.type === 'LIABILITY').map(a => a.symbol))]) {
+      const la = acts.filter(a => a.type === 'LIABILITY' && a.symbol === s), market = !!(ch[s] && ch[s].c.length), cur = market ? curOf(s) : la[la.length - 1].currency;
+      if (fxBadSym.has(s) || la.some(a => fxMissing(a.currency))) continue;
+      const value = market ? la.reduce((t, a) => t + a.qty, 0) * pxArr[s][li] * fxAt(cur, li) : la.reduce((t, a) => t + a.qty * a.price * fxAt(a.currency, li), 0);
+      liabilities.push({ symbol: s, name: s.startsWith('MANUAL:') ? s.slice(7) : (quotes[s] && (quotes[s].longName || quotes[s].name)) || s, currency: cur, value, first: la[0].date, ...fxFlag(cur) });
+      liabTotal += value;
+    }
+    liabilities.sort((a, b) => b.value - a.value);
+    const fxNote = { missing: [], stale: [] };
+    for (const [c, s] of Object.entries(fxMiss)) fxNote.missing.push({ currency: c, main: unitNorm(c)[0], symbols: [...s] });
+    for (const [c, f] of Object.entries(fxInfo)) {
+      if (!f.stale) continue;
+      const list = [...holdings, ...liabilities].filter(x => x.currency === c).map(x => x.symbol);
+      if (list.length || c === benchCur) fxNote.stale.push({ currency: c, main: unitNorm(c)[0], asOf: f.asOf ?? null, noHistory: !!f.noHistory, symbols: list, bench: c === benchCur });
     }
     for (const x of holdings) x.weight = total ? x.value / total * 100 : 0;
     holdings.sort((a, b) => b.value - a.value);
@@ -1552,7 +1732,7 @@ async function portfolioAnalysis(base, bench) {
     if (bRets.length > 20) { const n = Math.min(rets.length, bRets.length), a = rets.slice(-n), b = bRets.slice(-n), ma = a.reduce((s, x) => s + x, 0) / n, mb = b.reduce((s, x) => s + x, 0) / n; let cov = 0, vb = 0; for (let i = 0; i < n; i++) { cov += (a[i] - ma) * (b[i] - mb); vb += (b[i] - mb) ** 2; } beta = vb ? cov / vb : null; }
     // dividends by month (base, at payment FX)
     const divMonths = {};
-    acts.filter(a => a.type === 'DIVIDEND' || a.type === 'INTEREST').forEach(a => { const i = days.indexOf(a.date); const amt = a.qty * a.price * fxAt(a.currency, i < 0 ? li : i); divMonths[a.date.slice(0, 7)] = (divMonths[a.date.slice(0, 7)] || 0) + amt; });
+    acts.filter(a => (a.type === 'DIVIDEND' || a.type === 'INTEREST') && !skipAct(a)).forEach(a => { const i = days.indexOf(a.date); const amt = a.qty * a.price * fxAt(a.currency, i < 0 ? li : i); divMonths[a.date.slice(0, 7)] = (divMonths[a.date.slice(0, 7)] || 0) + amt; });
     // downsample series
     const step = Math.max(1, Math.ceil(out.t.length / 700)), ds = {};
     for (const k of Object.keys(out)) ds[k] = out[k].filter((_, i) => i % step === 0 || i === out[k].length - 1);
@@ -1563,9 +1743,9 @@ async function portfolioAnalysis(base, bench) {
         value: total, cash: cashTotal, invested: openCost, netInvested: invested, unrealized: unreal, realized, dividends, fees, net, dayChange: dayChg, dayPct: total - dayChg ? dayChg / (total - dayChg) * 100 : 0,
         roai: avgInv ? net / avgInv * 100 : null, simple: openCost ? unreal / openCost * 100 : null, twr: twr * 100, twrAnn: years >= 1 ? (Math.pow(1 + twr, 1 / years) - 1) * 100 : null, irr: irr != null ? irr * 100 : null,
         vol, mdd: mdd * 100, sharpe: vol && irr != null ? (irr * 100 - 4) / vol : null, beta, projDiv, projYield: total ? projDiv / total * 100 : null,
-        benchValue: out.benchValue[out.benchValue.length - 1], gf: ext.gfPerformance || null,
+        benchValue: out.benchValue[out.benchValue.length - 1], gf: ext.gfPerformance || null, liabilities: liabTotal, netWorth: total - liabTotal,
       },
-      holdings, closed, alloc, series: ds, divMonths, warnings, unknown: ext.unknown || [],
+      holdings, closed, alloc, series: ds, divMonths, warnings, unknown: ext.unknown || [], liabilities, fx: fxNote, benchErr, splitAdj, splitWarn,
     };
   });
 }
@@ -1632,15 +1812,18 @@ const STATE_FILE = path.join(DATA_DIR, 'state.json');
 const STATE_KEYS = new Set(['portfolio', 'watchlist', 'alerts', 'journal', 'settings', 'links', 'layout', 'notes']);
 let state = {};
 let dataWritable = true;
-function writeJSONAtomic(file, obj) {
+// returns success; dataWritable (shown to the client) follows only writes of user data, not caches like fx-last.json
+function writeJSONAtomic(file, obj, { track = true } = {}) {
   try {
     const tmp = file + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(obj));
     fs.renameSync(tmp, file);
-    dataWritable = true;
+    if (track) dataWritable = true;
+    return true;
   } catch (e) {
-    dataWritable = false;
+    if (track) dataWritable = false;
     log('write failed', file, e.message);
+    return false;
   }
 }
 function loadState() {
@@ -1683,7 +1866,7 @@ function loadPin() {
   } catch { pinBroken = true; log('PIN config corrupted, portfolio stays locked:', PIN_FILE); } // parser messages could quote the file
 }
 // writeJSONAtomic swallows errors: the new config may enter memory only after a confirmed write
-function pinSave(next) { writeJSONAtomic(PIN_FILE, next); if (!dataWritable) throw pinErr(500, 'PIN se nepodařilo uložit – datový adresář není zapisovatelný'); pinConf = next; pinBroken = false; }
+function pinSave(next) { if (!writeJSONAtomic(PIN_FILE, next)) throw pinErr(500, 'PIN se nepodařilo uložit – datový adresář není zapisovatelný'); pinConf = next; pinBroken = false; }
 function pinLeft(token) { const exp = token ? pinSessions.get(token) : 0; if (!exp) return 0; const left = exp - Date.now(); if (left <= 0) pinSessions.delete(token); return Math.max(0, left); }
 const pinIsOpen = token => !pinEnabled() || pinLeft(token) > 0;
 function pinStatus(token) { const enabled = pinEnabled(), left = enabled ? pinLeft(token) : 0; return { enabled, open: !enabled || left > 0, remaining: Math.ceil(left / 1000), minutes: pinConf ? pinConf.minutes : PIN_DEFAULT_MIN, retryIn: pinRetryIn() }; }
@@ -1952,6 +2135,7 @@ loadState();
 loadPin();
 loadArchive();
 loadExt();
+loadFxLast();
 
 const server = http.createServer((req, res) => {
   handle(req, res).catch(e => { log('fatal handler error', e); try { sendJSON(req, res, 500, { error: 'internal error' }); } catch {} });
@@ -1981,6 +2165,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
     log('shutting down…');
     flushState();
+    if (fxLastTimer) flushFxLast();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 3000).unref();
   });

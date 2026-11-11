@@ -2,7 +2,7 @@ manifestVersion: 1
 id: finterm-terminal
 category: finance
 name: FinTerm
-version: "1.3.1"
+version: "1.4.0"
 tagline: Bloomberg-style finanční terminál – trhy, kalendář, zprávy, krypto, portfolio
 icon: https://raw.githubusercontent.com/davidfreitagdev-oss/finterm-umbrel/main/finterm-terminal/app/public/icon.svg
 description: >-
@@ -28,10 +28,15 @@ description: >-
 
   Žádné API klíče nejsou potřeba. Data jsou uložena lokálně na vašem Umbrelu.
 releaseNotes: >-
-  Opravy: našeptávač příkazové řádky už nepadá a zobrazuje návrhy příkazů i symbolů, Nastavení → Data & systém
-  ukazuje skutečnou verzi Node.js místo „false“. Obsahuje vše z 1.3.0: stránku Portfolio chrání PIN, po zadání
-  zůstane portfolio odemčené 20 minut (délku lze změnit v Nastavení → Data & systém). Zapomenutý PIN: smažte
-  ~/umbrel/app-data/finterm-terminal/data/pin.json a restartujte FinTerm.
+  Opravy čísel ve valuaci a portfoliu: akcie kotované v pencích a centech (Londýn, Johannesburg, Tel Aviv) se
+  oceňují v hlavní měně, férová cena už nevychází stokrát vyšší. Když Yahoo neuvádí investice (ČEZ), použije se
+  odhad volného CF z Yahoo, jinak se DCF nepočítá. Při výpadku kurzů se nic nepřepočítává 1 : 1 – použije se
+  poslední uložený kurz s datem, bez něj se pozice označí a nezapočtou. Srovnání s indexem používá historický kurz.
+  Bezriziková sazba i pro DKK, SEK, NOK, HUF, ZAR, ILS, INR, AUD, CAD, NZD, KRW, MXN a CLP, terminální růst nejvýš
+  do výše sazby, diskont nejméně o 4 p.b. nad sazbou. U bank a pojišťoven se nepočítá zadlužení, EV, FCF ani skóre
+  Zdraví. Dluh, hotovost a vlastní kapitál z jedné čtvrtletní rozvahy, výplatní poměr = dividenda / EPS. Konkurence
+  jen ze stejného sektoru a stejný verdikt na stránce Akcie i v portfoliu. Transakce před splitem se přepočítají.
+  Závazky (půjčky) jsou mimo výkonnost, nově čisté jmění.
 developer: FinTerm
 website: https://github.com/davidfreitagdev-oss/finterm-umbrel
 dependencies:
