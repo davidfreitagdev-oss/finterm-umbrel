@@ -9,6 +9,7 @@
  * CNN, mempool.space, RSS feeds), stores user state and runs price alerts.
  */
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -17,7 +18,7 @@ const crypto = require('crypto');
 const dns = require('dns').promises;
 const net = require('net');
 
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 const PORT = parseInt(process.env.PORT || '8420', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, '..', 'data'));
@@ -91,7 +92,7 @@ async function cached(key, ttl, fn, staleMax = 72 * 3600e3) {
 }
 setInterval(() => {
   const now = Date.now();
-  for (const [k, v] of cache) if (now - v.t > 72 * 3600e3) cache.delete(k);
+  for (const [k, v] of cache) if (now - v.t > 72 * 3600e3 || (k.startsWith('pfa:') && now - v.t > 30 * 60e3)) cache.delete(k);
   if (cache.size > 6000) [...cache.keys()].slice(0, cache.size - 5000).forEach(k => cache.delete(k));
 }, 15 * 60e3).unref();
 
@@ -127,36 +128,100 @@ async function fetchJSON(url, opts = {}) {
 }
 
 // SSRF guard for user-supplied URLs (custom RSS feeds)
-function isPrivateIp(ip) {
-  if (net.isIPv4(ip)) {
-    const [a, b] = ip.split('.').map(Number);
-    return a === 10 || a === 127 || a === 0 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
-  }
-  const l = ip.toLowerCase();
-  if (l.startsWith('::ffff:')) return isPrivateIp(l.slice(7));
-  return l === '::1' || l === '::' || l.startsWith('fc') || l.startsWith('fd') || l.startsWith('fe80');
+function isPrivateV4(ip) {
+  const [a, b, c] = ip.split('.').map(Number);
+  return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) || (a === 192 && b === 0 && (c === 0 || c === 2)) || (a === 192 && b === 88 && c === 99) || (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) || (a === 203 && b === 0 && c === 113);
 }
+// IPv6 as 8 numbers (any notation: "::", embedded dotted IPv4, zone id); null when not parseable
+function v6Words(ip) {
+  let s = String(ip).toLowerCase().replace(/%.*$/, '');
+  const m = /^(.*:)(\d+\.\d+\.\d+\.\d+)$/.exec(s);
+  if (m) { if (!net.isIPv4(m[2])) return null; const p = m[2].split('.').map(Number); s = m[1] + ((p[0] << 8) | p[1]).toString(16) + ':' + ((p[2] << 8) | p[3]).toString(16); }
+  const halves = s.split('::');
+  if (halves.length > 2) return null;
+  const part = h => (h ? h.split(':') : []);
+  const head = part(halves[0]), tail = halves.length === 2 ? part(halves[1]) : [];
+  const fill = halves.length === 2 ? 8 - head.length - tail.length : 0;
+  if (fill < 0 || (halves.length === 1 && head.length !== 8)) return null;
+  const words = [...head, ...Array(fill).fill('0'), ...tail].map(w => (/^[0-9a-f]{1,4}$/.test(w) ? parseInt(w, 16) : NaN));
+  return words.length === 8 && words.every(Number.isFinite) ? words : null;
+}
+const v4From = (hi, lo) => [hi >> 8, hi & 255, lo >> 8, lo & 255].join('.');
+function isPrivateIp(ip) {
+  if (net.isIPv4(ip)) return isPrivateV4(ip);
+  const w = v6Words(ip);
+  if (!w) return true; // unknown format: blocked
+  const zero = n => w.slice(0, n).every(x => x === 0);
+  if (zero(8)) return true;                                          // ::
+  if (zero(5) && w[5] === 0xffff) return isPrivateV4(v4From(w[6], w[7])); // ::ffff:a.b.c.d (IPv4-mapped, any notation)
+  if (zero(4) && w[4] === 0xffff && w[5] === 0) return isPrivateV4(v4From(w[6], w[7])); // ::ffff:0:a.b.c.d (translated)
+  if (zero(6)) return true;                                          // ::1 and IPv4-compatible ::a.b.c.d
+  if (w[0] === 0x64 && w[1] === 0xff9b) return w[2] !== 0 || w[3] !== 0 || w[4] !== 0 || w[5] !== 0 || isPrivateV4(v4From(w[6], w[7])); // NAT64 64:ff9b::/96; local-use 64:ff9b:1::/48 blocked
+  if (w[0] === 0x2002) return isPrivateV4(v4From(w[1], w[2]));      // 6to4 carries an IPv4
+  if (w[0] === 0x2001 && w[1] === 0) return true;                    // Teredo
+  if (w[0] === 0x2001 && w[1] === 0xdb8) return true;                // documentation
+  if (w[0] === 0x100 && w[1] === 0 && w[2] === 0 && w[3] === 0) return true; // discard 100::/64
+  return (w[0] & 0xfe00) === 0xfc00 || (w[0] & 0xffc0) === 0xfe80 || (w[0] & 0xffc0) === 0xfec0 || (w[0] & 0xff00) === 0xff00; // ULA, link/site-local, multicast
+}
+// resolves the host once, checks every address and returns the one to connect to (DNS rebinding: the request is pinned to it)
 async function assertPublicUrl(u) {
   const url = new URL(u);
   if (!/^https?:$/.test(url.protocol)) throw new Error('only http(s) URLs are allowed');
-  if (ALLOW_PRIVATE_FEEDS) return url;
+  if (ALLOW_PRIVATE_FEEDS) return { url, addr: null };
   const host = url.hostname.replace(/^\[|\]$/g, '');
-  const addrs = net.isIP(host) ? [host] : (await dns.lookup(host, { all: true })).map(a => a.address);
-  if (!addrs.length || addrs.some(isPrivateIp)) throw new Error('private network address blocked');
-  return url;
+  const addrs = net.isIP(host) ? [{ address: host, family: net.isIP(host) }] : await dns.lookup(host, { all: true, verbatim: true });
+  if (!addrs.length || addrs.some(a => isPrivateIp(a.address))) throw new Error('private network address blocked');
+  return { url, addr: addrs[0] };
+}
+// GET over http(s) connected to the verified address (TLS still checks the host name); gzip/deflate/br, size limit.
+// timeout is the deadline for the whole request: the socket timeout alone only measures idle time, so a server dripping
+// a byte every few seconds would hold the request (and the news refresh waiting for it) for minutes
+function requestPinned(url, addr, { timeout = 15000, headers = {}, maxBytes = 5e6 } = {}) {
+  const mod = url.protocol === 'https:' ? https : http;
+  return new Promise((resolve, reject) => {
+    let body = null, done = false, timer = null;
+    const finish = (fn, v) => { if (done) return; done = true; clearTimeout(timer); fn(v); };
+    const fail = e => { req.destroy(e); if (body) body.destroy(); finish(reject, e); };
+    const req = mod.request(url, {
+      method: 'GET', timeout,
+      headers: { 'User-Agent': UA, Accept: '*/*', 'Accept-Language': 'en-US,en;q=0.9,cs;q=0.8', 'Accept-Encoding': 'gzip, deflate, br', ...headers },
+      lookup: (hostname, o, cb) => (o && o.all ? cb(null, [{ address: addr.address, family: addr.family }]) : cb(null, addr.address, addr.family)),
+    }, res => {
+      const enc = String(res.headers['content-encoding'] || '').toLowerCase().trim();
+      body = enc === 'gzip' || enc === 'x-gzip' ? res.pipe(zlib.createGunzip()) : enc === 'deflate' ? res.pipe(zlib.createInflate()) : enc === 'br' ? res.pipe(zlib.createBrotliDecompress()) : res;
+      const chunks = [];
+      let size = 0;
+      body.on('data', c => { size += c.length; if (size > maxBytes) fail(new Error('response too large')); else chunks.push(c); });
+      body.on('end', () => finish(resolve, { status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }));
+      body.on('error', e => finish(reject, e));
+      res.on('close', () => { if (!res.complete) finish(reject, new Error('connection closed early')); });
+    });
+    timer = setTimeout(() => fail(new Error('timeout')), timeout);
+    req.on('timeout', () => fail(new Error('timeout')));
+    req.on('error', e => finish(reject, e));
+    req.end();
+  });
 }
 async function fetchPublicText(u, opts = {}) {
   let url = u;
   for (let i = 0; i < 4; i++) {
-    await assertPublicUrl(url);
-    const r = await fetchRaw(url, { ...opts, redirect: 'manual' });
-    const loc = r.headers.get('location');
+    const { url: parsed, addr } = await assertPublicUrl(url);
+    if (!addr) { // ALLOW_PRIVATE_FEEDS: plain fetch
+      const r = await fetchRaw(url, { ...opts, redirect: 'manual' });
+      const loc = r.headers.get('location');
+      if (r.status >= 300 && r.status < 400 && loc) { url = new URL(loc, url).href; continue; }
+      if (!r.ok) throw new HttpError(r.status, url);
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length > 5e6) throw new Error('response too large');
+      return decodeBody(buf, r.headers.get('content-type') || '');
+    }
+    const r = await requestPinned(parsed, addr, { timeout: opts.timeout, headers: opts.headers });
+    const loc = r.headers.location;
     if (r.status >= 300 && r.status < 400 && loc) { url = new URL(loc, url).href; continue; }
-    if (!r.ok) throw new HttpError(r.status, url);
-    const buf = Buffer.from(await r.arrayBuffer());
-    if (buf.length > 5e6) throw new Error('response too large');
-    return decodeBody(buf, r.headers.get('content-type') || '');
+    if (r.status < 200 || r.status >= 300) throw new HttpError(r.status, url);
+    return decodeBody(r.body, String(r.headers['content-type'] || ''));
   }
   throw new Error('too many redirects');
 }
@@ -203,11 +268,86 @@ const SYM_RE = /^[A-Z0-9^=._\-&]{1,24}$/;
 const cleanSymbols = (str, max = 150) =>
   [...new Set(String(str || '').split(',').map(s => s.trim().toUpperCase()).filter(s => SYM_RE.test(s)))].slice(0, max);
 
+// Yahoo names: the long name wins, without Yahoo's padding and listing codes ("GEA Group AG      I", "PKN C.XWAR PLN")
+const NAME_JUNK = [
+  /\s{2,}[A-Za-z]{1,2}\s*$/,                  // share class / listing letter after padding
+  /\s+C\.X[A-Z]{3,4}\s+[A-Z]{3}\s*$/,         // Warsaw "C.XWAR PLN", "C.XGLO PLN"
+  /\s+ORD\s+(?:SHS|[A-Z]{3}\s*[\d.,]+)\s*$/i, // "ORD USD0.20", "ORD SHS"
+  /\s+EO\s+[-\d,.]+\s*$/,                     // "EO 0,3" (nominal value in euro)
+];
+function cleanName(s) {
+  if (s == null) return '';
+  let t = decodeEntities(String(s));
+  for (const re of NAME_JUNK) t = t.replace(re, '');
+  return t.replace(/\s+/g, ' ').trim();
+}
+const qName = q => cleanName(q.longName) || cleanName(q.shortName) || q.displayName || q.symbol;
+// Yahoo's forward dividend yield is sometimes far off (Samsung ~9 %: the last special dividend × 4). The trailing yield is
+// never a substitute: for GBp listings Yahoo divides the GBP dividend by the GBp price (VOD.L 0.04 % instead of 3.4 %).
+// A forward yield of 3 % or more (or none, with a trailing dividend) is checked in getQuotes against the dividends really
+// paid in the last 12 months (chart events in the unit of the price, cached 24 h): forward more than 1.5× the paid yield →
+// the paid yield. The chart counts only when it is complete (divChartOk): Yahoo's monthly chart misses the latest payments
+// of some ADRs (INFY), others have none at all (TM, SONY, HDB).
+const divSuspect = new Set();
+function divYieldOf(q) {
+  const fwd = Number.isFinite(q.dividendYield) ? q.dividendYield : null;
+  if (q.symbol && (fwd >= 3 || (fwd == null && (q.trailingAnnualDividendRate > 0 || q.trailingAnnualDividendYield > 0)))) divSuspect.add(String(q.symbol).toUpperCase());
+  return fwd ?? undefined;
+}
+// both dividend lookups below: one request per symbol at a time (cached() shares a request in flight – the stock page asks for
+// the same quote several times at once), a result is kept for a day, a failed request for 10 minutes (then it is retried)
+const DIV_TTL = r => (r.err ? 10 * 60e3 : 24 * 3600e3);
+// dividends paid in the last 12 months: { sum (unit of the price), times: [payment ms, ascending] } or null without events
+// (unknown, not zero)
+function trailDivSum(sym) {
+  return cached('divsum:' + sym, DIV_TTL, async () => {
+    try {
+      const j = await yahooJSON(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1y&interval=1mo&events=div`);
+      const ev = Object.values(j?.chart?.result?.[0]?.events?.dividends || {}).filter(x => +x.amount > 0 && x.date > 0);
+      return { v: ev.length ? { sum: ev.reduce((s, x) => s + +x.amount, 0), times: ev.map(x => x.date * 1000).sort((a, b) => a - b) } : null };
+    } catch { return { v: null, err: true }; }
+  }).then(r => r.v);
+}
+// the last (or announced) ex-dividend date from summaryDetail; null = Yahoo has none, undefined = request failed (an error of
+// quoteSummary is kept too: no new request with every quote refresh)
+function lastExDiv(sym) {
+  return cached('exdiv:' + sym, DIV_TTL, async () => {
+    try {
+      const j = await yahooJSON(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=summaryDetail`);
+      const x = j?.quoteSummary?.result?.[0]?.summaryDetail?.exDividendDate, s = x && typeof x === 'object' ? x.raw : x;
+      return { v: Number.isFinite(s) && s > 0 ? s * 1000 : null };
+    } catch { return { v: undefined, err: true }; }
+  }).then(r => r.v);
+}
+// is the chart complete? Its last payment may be at most ~10 days older than the last ex-dividend date; an announced
+// (future) ex-date is compared with the usual spacing of the chart's payments (needs two of them)
+function divChartOk(info, exd, now = Date.now()) {
+  if (!info || !info.times.length) return false;
+  if (exd == null) return true; // Yahoo knows no ex-date: nothing to compare with
+  const last = info.times[info.times.length - 1];
+  if (exd <= now) return last >= exd - 10 * 864e5;
+  const gaps = info.times.slice(1).map((t, i) => t - info.times[i]).sort((a, b) => a - b);
+  return gaps.length > 0 && exd - last <= gaps[Math.floor(gaps.length / 2)] * 1.5 + 10 * 864e5;
+}
+async function fixDivYields(out) {
+  const sus = Object.keys(out).filter(s => divSuspect.has(s) && out[s] && out[s].price > 0);
+  if (!sus.length) return;
+  // at most 4 symbols at a time: the first load of a long watchlist would otherwise send dozens of chart requests at once
+  await Promise.race([mapLimit(sus, 4, async s => {
+    const q = out[s], info = await trailDivSum(s);
+    if (!info || !(info.sum > 0)) return;
+    const paid = info.sum / q.price * 100;
+    if (q.divYield != null && !(q.divYield > 1.5 * paid)) return; // plausible: the forward yield stays
+    const exd = await lastExDiv(s);
+    if (exd !== undefined && divChartOk(info, exd)) q.divYield = paid;
+  }), new Promise(r => setTimeout(r, 4000))]);
+}
+
 function normQuote(q) {
   const price = q.regularMarketPrice;
   const prev = q.regularMarketPreviousClose ?? null;
   return {
-    symbol: q.symbol, name: q.shortName || q.longName || q.displayName || q.symbol, longName: q.longName,
+    symbol: q.symbol, name: qName(q), longName: q.longName,
     price, prevClose: prev,
     change: q.regularMarketChange ?? (prev != null ? price - prev : null),
     changePct: q.regularMarketChangePercent ?? (prev ? (price / prev - 1) * 100 : null),
@@ -217,7 +357,7 @@ function normQuote(q) {
     exchange: q.fullExchangeName || q.exchange, type: q.quoteType, tz: q.exchangeTimezoneName,
     high52: q.fiftyTwoWeekHigh, low52: q.fiftyTwoWeekLow, ma50: q.fiftyDayAverage, ma200: q.twoHundredDayAverage,
     pe: q.trailingPE, fpe: q.forwardPE, eps: q.epsTrailingTwelveMonths, fwdEps: q.epsForward, pb: q.priceToBook, bookValue: q.bookValue,
-    divYield: q.dividendYield ?? (q.trailingAnnualDividendYield != null ? q.trailingAnnualDividendYield * 100 : undefined),
+    divYield: divYieldOf(q),
     delay: q.exchangeDataDelayedBy, bid: q.bid, ask: q.ask,
     prePrice: q.preMarketPrice, preChangePct: q.preMarketChangePercent,
     postPrice: q.postMarketPrice, postChangePct: q.postMarketChangePercent,
@@ -230,7 +370,7 @@ function chartMetaQuote(m) {
   const price = m.regularMarketPrice;
   const prev = m.chartPreviousClose ?? m.previousClose ?? null;
   return {
-    symbol: m.symbol, name: m.shortName || m.longName || m.symbol, price, prevClose: prev,
+    symbol: m.symbol, name: qName(m), price, prevClose: prev,
     change: prev != null ? price - prev : null,
     changePct: m.regularMarketChangePercent ?? (prev ? (price / prev - 1) * 100 : null),
     high: m.regularMarketDayHigh, low: m.regularMarketDayLow, volume: m.regularMarketVolume,
@@ -303,17 +443,19 @@ async function getQuotes(syms) {
     const c = quoteCache.get(s);
     if (c) out[s] = Date.now() - c.t > QUOTE_TTL * 6 ? { ...c.q, stale: true } : c.q;
   }
+  await fixDivYields(out);
   return out;
 }
 
 const RANGES = new Set(['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max']);
 const INTERVALS = new Set(['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo']);
 
-function getChart(sym, range = '1mo', interval = '1d') {
+function getChart(sym, range = '1mo', interval = '1d', divs = false) {
   const intraday = /[mh]$/.test(interval) && interval !== '1mo' && interval !== '3mo';
-  return cached(`chart:${sym}:${range}:${interval}`, intraday ? 60e3 : 15 * 60e3, async () => {
-    // daily+ charts carry the split history (closes are split-adjusted; the portfolio re-bases pre-split trades)
-    const j = await yahooJSON(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=${range}&interval=${interval}&includePrePost=false${intraday ? '' : '&events=split'}`);
+  return cached(`chart:${sym}:${range}:${interval}${divs && !intraday ? ':div' : ''}`, intraday ? 60e3 : 15 * 60e3, async () => {
+    // daily+ charts carry the split history (closes are split-adjusted; the portfolio re-bases pre-split trades);
+    // divs = the dividend events too (fundamentals: dividends paid, no separate request)
+    const j = await yahooJSON(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=${range}&interval=${interval}&includePrePost=false${intraday ? '' : divs ? '&events=div,split' : '&events=split'}`);
     const res = j?.chart?.result?.[0];
     if (!res) throw new Error(j?.chart?.error?.description || 'no chart data');
     const q = res.indicators?.quote?.[0] || {};
@@ -321,6 +463,7 @@ function getChart(sym, range = '1mo', interval = '1d') {
     const splits = Object.values(res.events?.splits || {}).map(s => ({ t: s.date * 1000, num: +s.numerator, den: +s.denominator }))
       .filter(s => s.t && s.num > 0 && s.den > 0 && s.num !== s.den).sort((a, b) => a.t - b.t);
     const out = { symbol: res.meta?.symbol || sym, currency: res.meta?.currency, tz: res.meta?.exchangeTimezoneName, meta: chartMetaQuote(res.meta), t: [], o: [], h: [], l: [], c: [], v: [], splits };
+    if (divs && !intraday) out.divEvents = res.events?.dividends || {};
     for (let i = 0; i < ts.length; i++) {
       const c = q.close?.[i];
       if (c == null) continue;
@@ -361,13 +504,254 @@ async function getSpark(syms, range = '1d', interval = '15m') {
   return out;
 }
 
-function ySearch(q) {
+// raw Yahoo search hits (no options, only instruments Yahoo itself quotes)
+function ySearchRaw(q) {
   return cached('search:' + q.toLowerCase(), 3600e3, async () => {
     const j = await yahooJSON(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0&listsCount=0`);
-    return (j.quotes || []).filter(x => x.symbol).map(x => ({
-      symbol: x.symbol, name: x.shortname || x.longname || x.symbol, exchange: x.exchDisp || x.exchange, type: x.typeDisp || x.quoteType,
-    }));
+    mark('yahoo', true);
+    return (j.quotes || []).filter(x => x.symbol && x.quoteType !== 'OPTION' && x.isYahooFinance !== false);
   });
+}
+async function ySearch(q) {
+  return (await ySearchRaw(q)).map(x => ({
+    symbol: x.symbol, name: cleanName(x.longname) || cleanName(x.shortname) || x.symbol, exchange: x.exchDisp || x.exchange, type: x.typeDisp || x.quoteType,
+  }));
+}
+
+// ───────────────────────────── instrument resolver ─────────────────────────────
+// Typed text → Yahoo instrument. An explicit symbol (. ^ = -) is verified by a quote (BRK.B → BRK-B). Anything else goes to
+// Yahoo search plus one bulk quote of the text on the main exchanges. Candidates are listings whose ticker equals the text
+// or whose name starts with it. Listings of one firm resolve to the home listing; firms that hold the same ticker on main
+// exchanges (ALV = Allianz / Autoliv) are returned as a choice. Never options, always with a price.
+const MAIN_SFX = ['DE', 'PA', 'AS', 'BR', 'MI', 'MC', 'LS', 'SW', 'L', 'IR', 'VI', 'PR', 'WA', 'BD', 'ST', 'CO', 'HE', 'OL', 'T', 'HK', 'KS', 'KQ', 'TW', 'TWO', 'SS', 'SZ', 'NS', 'BO', 'AX', 'NZ', 'TO', 'SA', 'MX', 'JO', 'TA', 'SI'];
+const MAIN_SET = new Set(MAIN_SFX);
+const SEC_DE = new Set(['F', 'BE', 'DU', 'HM', 'HA', 'MU', 'SG']); // secondary German venues: only after the primary listings
+// home exchanges by the company's country (Yahoo assetProfile); '' = USA
+const HOME_SFX = {
+  'United States': [''], 'United Kingdom': ['L'], Jersey: ['L'], Guernsey: ['L'], 'Isle of Man': ['L'], Ireland: ['IR', 'L'], Germany: ['DE'], France: ['PA'], Netherlands: ['AS'],
+  Belgium: ['BR'], Portugal: ['LS'], Italy: ['MI'], Spain: ['MC'], Switzerland: ['SW'], Austria: ['VI'], 'Czech Republic': ['PR'], Czechia: ['PR'], Poland: ['WA'], Hungary: ['BD'],
+  Sweden: ['ST'], Denmark: ['CO'], Finland: ['HE'], Norway: ['OL'], Japan: ['T'], 'South Korea': ['KS', 'KQ'], Korea: ['KS', 'KQ'], Taiwan: ['TW', 'TWO'], 'Hong Kong': ['HK'],
+  China: ['HK', 'SS', 'SZ'], India: ['NS', 'BO'], Australia: ['AX'], 'New Zealand': ['NZ'], Canada: ['TO', 'V'], Brazil: ['SA'], Mexico: ['MX'], 'South Africa': ['JO'],
+  Israel: ['TA'], Singapore: ['SI'],
+};
+const sfxOf = s => (/\.([A-Z]{1,3})$/.exec(s) || [])[1] || '';
+const deaccent = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+const nameToks = s => deaccent(s).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+// legal forms (also spelled out: AG = Aktiengesellschaft, plc = public limited company, N.V. = naamloze vennootschap), share
+// classes and listing words: "Siemens AG", "Siemens Aktiengesellschaft" and "SIEMENS AG NA O.N." are one name
+const LEGAL_TOK = new Set(['ag', 'se', 'sa', 'nv', 'bv', 'plc', 'inc', 'incorporated', 'corp', 'corporation', 'co', 'company', 'companies', 'ltd', 'limited', 'llc', 'lp', 'holding', 'holdings', 'group',
+  'spa', 'sab', 'cv', 'de', 'ab', 'asa', 'oyj', 'oy', 'kgaa', 'gmbh', 'bhd', 'berhad', 'tbk', 'pt', 'the', 'public', 'nyrt', 'publ', 'aktiengesellschaft', 'societe', 'europeenne', 'class',
+  'ord', 'shs', 'registered', 'reg', 'adr', 'gdr', 'cdr', 'sponsored', 'unsponsored', 'new',
+  'as', 'aktie', 'aktien', 'na', 'on', 'vna', 'inh', 'vz', 'st', 'kg', 'rt', 'ltda', 'limitada', 'saa', 'pjsc', 'ojsc', 'jsc', 'joint', 'kommanditgesellschaft', 'auf',
+  'aktiebolag', 'aktiebolaget', 'aktieselskab', 'aktieselskabet', 'allmennaksjeselskap', 'osakeyhtio', 'julkinen', 'naamloze', 'vennootschap', 'anonyme', 'sociedad', 'anonima',
+  'societas', 'europaea', 'akciova', 'spolecnost', 'kabushiki', 'kaisha']);
+const firmToks = s => nameToks(s).filter(t => t.length > 1 && !LEGAL_TOK.has(t));
+const tokKey = ft => [...new Set(ft)].sort().join(' ');
+const domesticCur = c => !!(c.finCur && c.currency && unitNorm(c.currency)[0] === c.finCur);
+const isOtc = r => /OTC|Pink/i.test(r.fullExchangeName || '') || ['PNK', 'OQB', 'OQX', 'OEM', 'OGM', 'OBB'].includes(r.exchange);
+// one bulk quote, no per-symbol fallback (a missing symbol simply does not exist); also refreshes the quote cache
+async function quoteRaw(list) {
+  const out = {};
+  await Promise.all(chunk([...new Set(list)], 50).map(async ch => {
+    const j = await yahooJSON(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(ch.join(','))}`);
+    for (const r of j?.quoteResponse?.result || []) {
+      if (!r || !r.symbol || r.regularMarketPrice == null) continue;
+      const S = r.symbol.toUpperCase();
+      out[S] = r;
+      quoteCache.set(S, { q: normQuote(r), t: Date.now() });
+    }
+  }));
+  mark('yahoo', true);
+  return out;
+}
+const pub = c => ({ symbol: c.symbol, name: c.name, exchange: c.exchange, currency: c.currency, type: c.type, domestic: !!c.domestic, ...(c.mcapUsd ? { mcapUsd: Math.round(c.mcapUsd) } : {}) });
+// listings of one firm: the same significant name tokens (legal forms aside) and reporting currency. Siemens AG, Siemens
+// Energy and Siemens Healthineers are three firms; Siemens Ltd (India) reports in INR and is a fourth.
+function sameFirm(a, b) {
+  if (a.finCur && b.finCur && a.finCur !== b.finCur) return false;
+  if (a.fk && a.fk === b.fk) return true;
+  // one firm under two names (GE Aerospace / General Electric): same reporting currency, market cap within 10 % and neither
+  // name containing the other (Siemens / Siemens Energy stay two firms whatever their size)
+  if (!(a.mcapUsd && b.mcapUsd && a.finCur && b.finCur && Math.abs(Math.log(a.mcapUsd / b.mcapUsd)) < Math.log(1.1))) return false;
+  const A = new Set(a.ft), B = new Set(b.ft);
+  return !a.ft.every(t => B.has(t)) && !b.ft.every(t => A.has(t));
+}
+const byRank = (a, b) => a.rank - b.rank || a.tier - b.tier || a.ord - b.ord || a.symbol.localeCompare(b.symbol);
+const byTier = (a, b) => a.tier - b.tier || byRank(a, b);
+// home listing of one firm, chosen from all its listings: the company's country (one cached profile request), else quote
+// currency = reporting currency; primary venues before the secondary German ones (SIE.DE, never SIE.HA). On the same venue
+// tier a listing whose ticker is exactly the text comes first: share classes are one firm and Yahoo's order must not swap
+// them (VOW → VOW.DE, VOW3 → VOW3.DE; a name keeps Yahoo's order: Volkswagen → VOW3.DE). Only the chosen listing is marked
+// domestic – the flag belongs to its own firm
+function preferredListing(f, country) {
+  const ord = [...f].sort((a, b) => a.tier - b.tier || !!b.exact - !!a.exact || byRank(a, b)), home = country && HOME_SFX[country];
+  const h = (home && ord.find(c => home.includes(c.sfx) && !(c.sfx === '' && c.otc))) || ord.find(c => domesticCur(c)) || null;
+  ord.forEach(c => { c.domestic = c === h; });
+  return h || [...f].sort(byRank)[0];
+}
+const timeoutP = (p, ms, fallback) => Promise.race([p, new Promise(r => setTimeout(() => r(fallback), ms))]);
+const resolveDown = e => Object.assign(new Error('Vyhledávání Yahoo je nedostupné: ' + e.message), { status: 502 });
+const STALE_QUOTE = 30 * 864e5; // a listing without a trade for a month (INFINEON.BD, last price 7/2024) is no candidate
+// listings → firms (in Yahoo's order); every firm marks its own home listing
+function groupFirms(list) {
+  const firms = [];
+  for (const c of [...list].sort(byRank)) { const f = firms.find(f => f.some(m => sameFirm(m, c))); if (f) f.push(c); else firms.push([c]); }
+  return firms;
+}
+
+// light = while typing: Yahoo search (cached) and one bulk quote of the shown hits (≤ 8) for exchange and currency – no
+// probing of exchange suffixes, no profiles, no pick; Enter or a pick runs the full resolution
+async function resolveRun(q, { light = false } = {}) {
+  const up = q.toUpperCase(), plain = deaccent(up);
+  const out = (extra) => ({ q, pick: null, choice: null, candidates: [], exact: false, ...extra });
+  const explicit = /[.^=\-]/.test(up) && SYM_RE.test(up);
+  // 4. explicit symbol, verified by a quote; XXX.Y without a quote is tried as a share class XXX-Y
+  if (explicit && !light) {
+    const alt = /^[A-Z0-9]+\.[A-Z]$/.test(up) ? up.replace('.', '-') : null;
+    let raw = await quoteRaw([up, alt].filter(Boolean)).catch(() => ({}));
+    let hit = raw[up] ? up : alt && raw[alt] ? alt : null;
+    if (!hit) { // the bulk endpoint misses some instruments (funds, some indices): the chart endpoint decides
+      const qs = await getQuotes([up, alt].filter(Boolean)).catch(() => ({}));
+      const s = qs[up] ? up : alt && qs[alt] ? alt : null;
+      if (s && qs[s].price != null) {
+        const n = qs[s], c = { symbol: s, name: n.name || s, exchange: n.exchange, currency: n.currency, type: n.type, domestic: false };
+        return out({ pick: c, candidates: [c], exact: true, via: 'symbol' });
+      }
+    } else {
+      const r = raw[hit], c = { symbol: hit, name: qName(r), exchange: r.fullExchangeName || r.exchange, currency: r.currency, type: r.quoteType, finCur: r.financialCurrency || null };
+      c.domestic = domesticCur(c);
+      return out({ pick: pub(c), candidates: [pub(c)], exact: true, via: hit === up ? 'symbol' : 'class' });
+    }
+  }
+  // 5. search (also without diacritics) + one bulk quote of the text on the main exchanges
+  const variants = [...new Set([q, deaccent(q)])];
+  let searchErr = null;
+  const hits = (await Promise.all(variants.map(v => ySearchRaw(v).catch(e => { searchErr = e; return []; })))).flat();
+  const rankOf = new Map();
+  for (const x of hits) { const S = String(x.symbol).toUpperCase(); if (!rankOf.has(S)) rankOf.set(S, rankOf.size); }
+  const ticker = /^[A-Z0-9]{1,12}$/.test(plain), digits = /^\d+$/.test(plain);
+  const trial = [];
+  if (light) { if (explicit) trial.push(up); }
+  else if (ticker) {
+    trial.push(plain, ...MAIN_SFX.map(s => `${plain}.${s}`));
+    if (digits && plain.length < 4) trial.push(`${plain.padStart(4, '0')}.HK`); // Hong Kong codes have 4 digits (700 → 0700.HK)
+    else if (/^[A-Z][A-Z0-9]{1,9}$/.test(plain)) trial.push(`${plain}-USD`);
+  }
+  if (light && searchErr && !trial.length) throw resolveDown(searchErr);
+  const syms = (light ? [...new Set([...trial, ...rankOf.keys()])].filter(s => SYM_RE.test(s)).slice(0, 8) : [...new Set([...rankOf.keys(), ...trial])].filter(s => SYM_RE.test(s)));
+  // the quotes are the proof (price, exchange, currency): without them nothing is verified – an error, never "not found"
+  let raw;
+  try { raw = syms.length ? await quoteRaw(syms) : {}; }
+  catch (e) {
+    if (!light || searchErr) throw resolveDown(e);
+    // typing: the search hits without currency are still a useful list (not cached)
+    const list = hits.filter(x => SYM_RE.test(String(x.symbol).toUpperCase())).slice(0, 8).map(x => ({ symbol: String(x.symbol).toUpperCase(), name: cleanName(x.longname) || cleanName(x.shortname) || x.symbol, exchange: x.exchDisp || x.exchange, currency: '', type: x.quoteType, domestic: false }));
+    return out({ candidates: list, light: true, degraded: true });
+  }
+  const degraded = !!searchErr; // only the probed exchange suffixes: exact tickers count, names do not
+  if (degraded && !Object.keys(raw).length) throw resolveDown(searchErr);
+  const qf = firmToks(q), qk = tokKey(qf), now = Date.now();
+  const cands = [];
+  for (const [S, r] of Object.entries(raw)) {
+    if (r.quoteType === 'OPTION') continue;
+    if (r.regularMarketTime && now - r.regularMarketTime * 1000 > STALE_QUOTE && !(light && S === up)) continue;
+    const sfx = sfxOf(S), base = sfx ? S.slice(0, -sfx.length - 1) : S;
+    const name = qName(r), ft = firmToks(name), fk = tokKey(ft);
+    const crypto = /^([A-Z0-9]+?)(\d{4,})?-[A-Z]{3}$/.exec(S);
+    const exact = ticker && (base === plain || (digits && /^\d+$/.test(base) && +base === +plain) || (!digits && r.quoteType === 'CRYPTOCURRENCY' && !!crypto && crypto[1] === plain));
+    // the name equals the text (Siemens = Siemens AG = Siemens Aktiengesellschaft) or starts with it (Siemens Energy)
+    const exactName = !degraded && qf.length > 0 && fk === qk;
+    const nameHit = !degraded && qf.length > 0 && qf.every((t, i) => ft[i] === t);
+    const tier = !sfx ? (isOtc(r) ? 2 : 1) : MAIN_SET.has(sfx) ? 1 : SEC_DE.has(sfx) ? 2 : 3;
+    cands.push({
+      symbol: S, name, exchange: r.fullExchangeName || r.exchange, currency: r.currency, type: r.quoteType, finCur: r.financialCurrency || null, mcap: r.marketCap || null,
+      sfx, otc: !sfx && isOtc(r), tier, rank: rankOf.has(S) ? rankOf.get(S) : Infinity, ord: sfx ? MAIN_SFX.indexOf(sfx) + 1 || 99 : 0, exact, exactName, nameHit: nameHit || exactName, ft, fk,
+      // a coin without a market cap (memecoins like MONET-USD) is never a competitor
+      junk: r.quoteType === 'CRYPTOCURRENCY' && !(r.marketCap > 0),
+    });
+  }
+  if (light) {
+    // Yahoo's order, the explicit symbol first; every firm marks its own home listing (quote currency = reporting currency)
+    const list = cands.filter(c => c.rank < Infinity || c.symbol === up).sort((a, b) => (b.symbol === up) - (a.symbol === up) || byRank(a, b));
+    groupFirms(list).forEach(f => preferredListing(f));
+    return out({ candidates: list.slice(0, 8).map(pub), light: true, ...(searchErr ? { degraded: true } : {}) });
+  }
+  // market caps in USD (only to compare firms)
+  const curs = [...new Set(cands.filter(c => c.mcap).map(c => unitNorm(c.currency || '')[0]).filter(Boolean))];
+  const rate = {};
+  await Promise.all(curs.map(async c => { try { rate[c] = (await timeoutP(fxConv(c, 'USD'), 4000, null))?.k; } catch { /* no rate */ } }));
+  for (const c of cands) { const m = unitNorm(c.currency || '')[0]; c.mcapUsd = c.mcap && rate[m] ? c.mcap * rate[m] : null; }
+  // firms over all listings (any venue): the home listing is chosen among all of them
+  const firms = groupFirms(cands);
+  const qualOf = f => f.filter(c => c.exact || c.nameHit);
+  const fx = f => {
+    const ql = qualOf(f);
+    return { rank: ql.length ? Math.min(...ql.map(c => c.rank)) : Infinity, tier: ql.length ? Math.min(...ql.map(c => c.tier)) : Infinity, mcapUsd: Math.max(0, ...f.map(c => c.mcapUsd || 0)) || null,
+      exact: f.some(c => c.exact), exactName: f.some(c => c.exactName), inSearch: f.some(c => c.rank < Infinity), equity: f.some(c => c.type === 'EQUITY'), junk: f.every(c => c.junk) };
+  };
+  const info = new Map(firms.map(f => [f, fx(f)]));
+  const I = f => info.get(f);
+  const bigger = (f, L) => (I(f).mcapUsd && I(L).mcapUsd ? I(f).mcapUsd > I(L).mcapUsd : I(f).inSearch);
+  let lead = null, contenders = [];
+  // 1. firms named exactly like the text (with the firms holding exactly this ticker on a main exchange): the biggest wins
+  //    when it is at least 3× any other (Siemens AG ≫ Siemens Ltd; RELIANCE: Reliance Industries ≫ Reliance, Inc.), else a
+  //    choice. A firm whose name only starts with the text (Siemens Energy) never wins over them.
+  if (firms.some(f => I(f).exactName && !I(f).junk)) {
+    const named = firms.filter(f => !I(f).junk && (I(f).exactName || (I(f).exact && I(f).tier <= 1)))
+      .sort((a, b) => (I(b).mcapUsd || 0) - (I(a).mcapUsd || 0) || I(a).rank - I(b).rank);
+    lead = named[0];
+    const m0 = I(lead).mcapUsd || 0, dominated = f => m0 > 0 && I(f).mcapUsd > 0 && m0 >= 3 * I(f).mcapUsd;
+    contenders = named.slice(1).filter(f => !dominated(f) && (I(f).mcapUsd > 0 || I(f).inSearch));
+  } else {
+    // 2. the ticker or a name starting with the text, on the best venue tier available
+    const qual = firms.filter(f => I(f).tier < Infinity);
+    const best = qual.length ? Math.min(...qual.map(f => I(f).tier)) : Infinity;
+    let pool = qual.filter(f => I(f).tier === best);
+    if (pool.some(f => !I(f).junk)) pool = pool.filter(f => !I(f).junk);
+    if (pool.length) {
+      lead = pool.slice().sort((a, b) => I(a).rank - I(b).rank)[0];
+      if (I(lead).rank === Infinity) lead = pool.slice().sort((a, b) => (I(b).exact - I(a).exact) || ((I(b).mcapUsd || 0) - (I(a).mcapUsd || 0)))[0];
+      // another firm with the same ticker on a main exchange competes when: the text is a number (exchange-local codes), or
+      // it is bigger than the lead firm (ALV: Allianz > Autoliv), or the sizes are not comparable (ETF) and Yahoo lists it
+      // without Yahoo search the probed tickers are all there is: several firms are always a choice
+      contenders = pool.filter(f => f !== lead && I(f).exact && !I(f).junk && (digits || degraded || bigger(f, lead)));
+    }
+  }
+  const others = cands.filter(c => c.tier <= 2).sort(byRank);
+  if (!lead) {
+    if (degraded) throw resolveDown(searchErr);
+    // nothing named like the text: Yahoo's hits, one listing per firm, as a choice
+    const list = groupFirms(others.filter(c => c.rank < Infinity)).slice(0, 8).map(f => preferredListing(f));
+    return out({ candidates: list.map(pub) });
+  }
+  const involved = [lead, ...contenders];
+  // company country (cached profile) only where a firm has listings in more than one country
+  const countries = await Promise.all(involved.map(f => {
+    if (new Set(f.map(c => c.sfx)).size < 2) return null;
+    const probe = [...f].sort(byTier).find(c => c.type === 'EQUITY') || [...f].sort(byTier)[0];
+    return timeoutP(getProfile(probe.symbol), 4000, {}).then(p => (p && p.country) || null, () => null);
+  }));
+  // every other firm in the list marks its own home listing too (without a profile)
+  firms.forEach(f => { if (!involved.includes(f)) preferredListing(f); });
+  const prefs = involved.map((f, i) => preferredListing(f, countries[i]));
+  const exact = involved.some(f => I(f).exact);
+  const rest = others.filter(c => !prefs.includes(c)).slice(0, 12);
+  const flags = degraded ? { degraded: true } : {};
+  if (!contenders.length) {
+    const pick = prefs[0];
+    return out({ pick: pub(pick), candidates: [pick, ...rest].slice(0, 12).map(pub), exact, country: countries[0] || null, ...flags });
+  }
+  // a choice: equities by size, then the rest (ETF, funds) by Yahoo's order
+  const order = prefs.map((c, i) => ({ c, f: I(involved[i]) }))
+    .sort((a, b) => (b.f.equity && b.f.mcapUsd ? 1 : 0) - (a.f.equity && a.f.mcapUsd ? 1 : 0) || (b.f.mcapUsd || 0) - (a.f.mcapUsd || 0) || a.f.rank - b.f.rank)
+    .map(x => x.c);
+  return out({ choice: order.map(pub), candidates: [...order, ...rest].slice(0, 12).map(pub), exact, ...flags });
+}
+// results while Yahoo search failed (degraded) are kept only briefly; light (typing) lists for 10 minutes
+function resolveQuery(raw, { light = false } = {}) {
+  const q = String(raw ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  if (!q) return Promise.resolve({ q, pick: null, choice: null, candidates: [], exact: false });
+  return cached((light ? 'resolveL:' : 'resolve:') + deaccent(q).toUpperCase(), v => (v.degraded ? 15e3 : light ? 10 * 60e3 : v.pick || v.choice ? 30 * 60e3 : 5 * 60e3), () => resolveRun(q, { light }), 30 * 60e3);
 }
 
 // Multi-period performance for a set of symbols (sectors, benchmarks…)
@@ -441,20 +825,38 @@ const TS_KEY = {
   ResearchAndDevelopment: 'rnd', StockBasedCompensation: 'sbc',
   // capex fallbacks (some exchanges, e.g. Prague, lack CapitalExpenditure)
   CapitalExpenditureReported: 'capexRep', PurchaseOfPPE: 'ppeBuy', NetPPEPurchaseAndSale: 'ppeNet',
+  // FCF for shareholders: interest paid shown in financing (IFRS only) is deducted, and so are lease repayments. Yahoo has no line for lease
+  // repayments, the current lease liability (principal due within a year) stands in for them. Where interest paid appears at all tells the
+  // presentation: IFRS shows it as a line of the cash-flow statement (CFO or CFF), US GAAP only as supplemental data (FA.base decides)
+  InterestPaidCFF: 'intPaidCff', InterestPaidCFO: 'intPaidCfo', InterestPaidSupplementalData: 'intPaidSup', CurrentCapitalLeaseObligation: 'leaseCur',
+  // EPS check (net income attributable to common shareholders) and one-off items (Yahoo's normalized income)
+  NetIncomeCommonStockholders: 'niCommon', NormalizedIncome: 'niNorm',
 };
-// quarterly balance sheet items: debt, cash and equity must come from the same date (D/E, EV, ROE)
-const TS_QUARTERLY = { StockholdersEquity: 'equity', TotalDebt: 'debt', CashAndCashEquivalents: 'cash', CashCashEquivalentsAndShortTermInvestments: 'cashSti' };
+// quarterly items: balance sheet (debt, cash and equity must come from the same date: D/E, EV, ROE), the current lease liability for the TTM
+// period and quarterly EPS (sum of four quarters = check of the TTM EPS)
+const TS_QUARTERLY = { StockholdersEquity: 'equity', TotalDebt: 'debt', CashAndCashEquivalents: 'cash', CashCashEquivalentsAndShortTermInvestments: 'cashSti', CurrentCapitalLeaseObligation: 'leaseCur', DilutedEPS: 'eps' };
+// a TTM ("trailing") value much older than the newest statements is not used (KOMB.PR reported dividends paid in 2019 as TTM)
+const TTM_MAX_AGE = 450 * 864e5; // ~15 months
 // long-term government bond yield per main currency (risk-free rate for discounting), FRED / OECD monthly series
 const RF_SERIES = {
   USD: 'DGS10', EUR: 'IRLTLT01DEM156N', CZK: 'IRLTLT01CZM156N', GBP: 'IRLTLT01GBM156N', JPY: 'IRLTLT01JPM156N', CHF: 'IRLTLT01CHM156N', PLN: 'IRLTLT01PLM156N',
   DKK: 'IRLTLT01DKM156N', SEK: 'IRLTLT01SEM156N', NOK: 'IRLTLT01NOM156N', HUF: 'IRLTLT01HUM156N', ZAR: 'IRLTLT01ZAM156N', ILS: 'IRLTLT01ILM156N',
   INR: 'INDIRLTLT01STM', AUD: 'IRLTLT01AUM156N', CAD: 'IRLTLT01CAM156N', NZD: 'IRLTLT01NZM156N', KRW: 'IRLTLT01KRM156N', MXN: 'IRLTLT01MXM156N', CLP: 'IRLTLT01CLM156N',
+  COP: 'COLIRLTLT01STM',
 };
 const RF_NAME = {
   DGS10: 'US 10Y', IRLTLT01DEM156N: 'DE 10Y (Bund)', IRLTLT01CZM156N: 'CZ 10Y', IRLTLT01GBM156N: 'UK 10Y', IRLTLT01JPM156N: 'JP 10Y', IRLTLT01CHM156N: 'CH 10Y', IRLTLT01PLM156N: 'PL 10Y',
   IRLTLT01DKM156N: 'DK 10Y', IRLTLT01SEM156N: 'SE 10Y', IRLTLT01NOM156N: 'NO 10Y', IRLTLT01HUM156N: 'HU 10Y', IRLTLT01ZAM156N: 'ZA 10Y', IRLTLT01ILM156N: 'IL 10Y',
   INDIRLTLT01STM: 'IN 10Y', IRLTLT01AUM156N: 'AU 10Y', IRLTLT01CAM156N: 'CA 10Y', IRLTLT01NZM156N: 'NZ 10Y', IRLTLT01KRM156N: 'KR 10Y', IRLTLT01MXM156N: 'MX 10Y', IRLTLT01CLM156N: 'CL 10Y',
+  COLIRLTLT01STM: 'CO 10Y',
 };
+// currencies without a long-term government yield on FRED (checked 11/2026 – OECD has no 10Y series for China, Taiwan, Hong Kong or Brazil,
+// the IMF only a Brazilian treasury-bill yield INTGSTBRM193N, a short-term rate): US 10Y + country risk premium, the reason is shown
+const RF_NONE = {
+  CNY: 'FRED nemá výnos čínských státních dluhopisů', TWD: 'FRED nemá výnos tchajwanských státních dluhopisů',
+  BRL: 'FRED má pro Brazílii jen výnos krátkodobých pokladničních poukázek (IMF), ne 10letých dluhopisů', HKD: 'HKD je pevně navázaný na USD, používá se US 10Y',
+};
+const RF_MAX_AGE = 183 * 864e5; // a local series older than ~6 months is not used (US 10Y instead)
 const RF_FIXED = 4.2; // only when FRED is unreachable
 const yraw = v => (v == null ? null : typeof v === 'object' ? (v.raw ?? null) : v);
 const unitNorm = c => (c === 'GBp' || c === 'GBX' ? ['GBP', 0.01] : c === 'ZAc' ? ['ZAR', 0.01] : c === 'ILA' ? ['ILS', 0.01] : c === 'USX' ? ['USD', 0.01] : [c, 1]);
@@ -532,16 +934,39 @@ function fixFcf(x) {
 // a failure is reported as peersErr – the caller then caches the fundamentals only briefly.
 const PEER_WAIT = 3000;
 const within = (p, ms) => new Promise((ok, fail) => { const t = setTimeout(() => fail(new Error('timeout')), ms); p.then(v => { clearTimeout(t); ok(v); }, e => { clearTimeout(t); fail(e); }); });
-async function peerFilter(sector, industry, list) {
+// one firm under several listings (GDR/ADR, other share class, second exchange): the same normalised name or the same web domain.
+// "SAMSUNG ELECTRONICS CO LTD (ATT" (GDR, London) = "Samsung Electronics Co., Ltd."; "SK hynix" = "SK hynix Inc."
+const FIRM_STOP = /\b(co|corp|corporation|company|companies|ltd|limited|inc|incorporated|plc|ag|se|sa|nv|spa|ab|asa|oyj|as|kgaa|bhd|tbk|holdings?|group|gdr|adr|ads|sponsored|unsponsored|reg|registered|ord|ordinary|shares?|stock|class|pref|preferred|the|and)\b/g;
+const firmKey = n => {
+  const s = String(n || '').toLowerCase().replace(/\s*\([^)]*$/, '') // truncated note at the end: "(ATT", "(REPR"
+    .replace(/\((?:[^)]*\b(?:gdr|adr|ads|repr|reg s|144a|att)\b[^)]*)\)/g, ' ')
+    .replace(/\$?\d+(?:[.,]\d+)?/g, ' ').replace(/[.,'’&/-]/g, ' ').replace(FIRM_STOP, ' ').replace(/\b[a-z]\b/g, ' ').replace(/\s+/g, ' ').trim();
+  return s.length >= 3 ? s : null;
+};
+const siteKey = w => { if (!w) return null; try { return new URL(/^https?:/i.test(w) ? w : 'http://' + w).hostname.toLowerCase().replace(/^www\d?\./, '') || null; } catch { return null; } };
+async function peerFilter(sector, industry, list, self = {}) {
   if (!list.length) return { peers: [], peerInfo: [], peersErr: null };
   const res = await Promise.all(list.map(s => within(profileOf(s), PEER_WAIT).then(p => ({ p }), e => ({ err: e.message || 'chyba' }))));
-  const info = list.map((s, i) => ({ symbol: s, sector: (res[i].p && res[i].p.sector) || null, industry: (res[i].p && res[i].p.industry) || null, failed: !!res[i].err }));
-  const sameInd = info.filter(p => sector && industry && p.sector === sector && p.industry === industry);
-  const sameSec = info.filter(p => sector && p.sector === sector && !sameInd.includes(p));
+  const info = list.map((s, i) => { const p = res[i].p || {}; return { symbol: s, name: p.name || null, sector: p.sector || null, industry: p.industry || null, failed: !!res[i].err, site: siteKey(p.website) }; });
+  // other listings of the analysed firm (same: 'self') and the second listing of a peer (same: symbol of the first) are not compared
+  const selfName = firmKey(self.name), selfSite = siteKey(self.website), seen = new Map();
+  for (const p of info) {
+    if (p.failed) continue;
+    const nk = firmKey(p.name), sk = p.site;
+    if ((nk && nk === selfName) || (sk && sk === selfSite)) { p.same = 'self'; continue; }
+    const first = (nk && seen.get('n:' + nk)) || (sk && seen.get('s:' + sk));
+    if (first) { p.same = first; continue; }
+    if (nk) seen.set('n:' + nk, p.symbol);
+    if (sk) seen.set('s:' + sk, p.symbol);
+  }
+  const ok = info.filter(p => !p.same);
+  const sameInd = ok.filter(p => sector && industry && p.sector === sector && p.industry === industry);
+  const sameSec = ok.filter(p => sector && p.sector === sector && !sameInd.includes(p));
   const use = (sameInd.length >= 2 ? sameInd : [...sameInd, ...sameSec]).slice(0, 5);
   const failed = info.filter(p => p.failed).length;
   return {
-    peers: use.map(p => p.symbol), peerInfo: info.map(p => ({ ...p, used: use.includes(p), match: sameInd.includes(p) ? 'industry' : sameSec.includes(p) ? 'sector' : null })),
+    peers: use.map(p => p.symbol),
+    peerInfo: info.map(({ site, ...p }) => ({ ...p, same: p.same || null, used: use.some(u => u.symbol === p.symbol), match: sameInd.some(u => u.symbol === p.symbol) ? 'industry' : sameSec.some(u => u.symbol === p.symbol) ? 'sector' : null })),
     peersErr: failed ? (failed === list.length ? 'profily konkurence se nenačetly' : `profil ${failed} z ${list.length} firem se nenačetl`) : null,
   };
 }
@@ -600,23 +1025,33 @@ function technicals(ch, rfPct) {
   };
 }
 
+// dividends paid per share (ex-dates) over 5 years from the dividend events of the daily chart (getChart(…, true)), in the quote unit;
+// checks Yahoo's annualised dividendRate. null = unknown (chart missing or in another currency), [] = no payment in 5 years
+function divHistory(ch, currency) {
+  if (!ch || !ch.divEvents || (ch.currency && currency && ch.currency !== currency)) return null;
+  return Object.values(ch.divEvents).map(x => ({ t: x.date * 1000, a: x.amount })).filter(x => x.t > 0 && x.a > 0).sort((a, b) => a.t - b.t);
+}
+
 function getFundamentals(sym) {
-  // a degraded result (FX rate missing or stale, peer profiles not loaded) is cached only briefly
-  return cached('fund:' + sym, v => (v.fxErr || v.fxStale || v.peersErr ? 2 * 60e3 : 6 * 3600e3), async () => {
+  // a degraded result (FX rate missing or stale, peer profiles or the chart with dividends not loaded) is cached only briefly;
+  // 'fund2:' – the data shape changed in 1.5
+  return cached('fund2:' + sym, v => (v.fxErr || v.fxStale || v.peersErr || v.divsErr ? 2 * 60e3 : 6 * 3600e3), async () => {
     const mods = 'assetProfile,financialData,defaultKeyStatistics,summaryDetail,price,earningsTrend,recommendationTrend,calendarEvents,earningsHistory';
     const p2 = Math.floor(Date.now() / 1000), p1 = p2 - 7 * 365 * 86400;
     const types = [...Object.keys(TS_KEY).flatMap(k => ['annual' + k, 'trailing' + k]), ...Object.keys(TS_QUARTERLY).map(k => 'quarterly' + k)].join(',');
+    // the daily chart (technicals) brings the dividend events along – no separate request that could fail or delay on its own
+    let chErr = null;
     const [qs, ts, ch, pe] = await Promise.all([
       yahooJSON(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=${mods}`),
       yahooJSON(`https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(sym)}?symbol=${encodeURIComponent(sym)}&type=${types}&period1=${p1}&period2=${p2}`).catch(() => null),
-      getChart(sym, '5y', '1d').catch(() => null),
+      getChart(sym, '5y', '1d', true).catch(e => { chErr = e.message || 'chyba'; return null; }),
       yahooJSON(`https://query2.finance.yahoo.com/v6/finance/recommendationsbysymbol/${encodeURIComponent(sym)}`).catch(() => null),
     ]);
     const r = qs && qs.quoteSummary && qs.quoteSummary.result && qs.quoteSummary.result[0];
     if (!r) throw Object.assign(new Error((qs && qs.quoteSummary && qs.quoteSummary.error && qs.quoteSummary.error.description) || 'fundamentální data nejsou k dispozici'), { status: 404 });
     const fd = r.financialData || {}, ks = r.defaultKeyStatistics || {}, sd = r.summaryDetail || {}, pr = r.price || {}, ap = r.assetProfile || {};
-    // statements
-    const annualMap = {}, quarterMap = {}, ttm = {}, ttmPrev = {};
+    // statements; curN counts the currency of the items (Yahoo's financialCurrency can be wrong: VALE3.SA reports in USD, Yahoo says BRL)
+    const annualMap = {}, quarterMap = {}, ttm = {}, ttmPrev = {}, ttmAt = {}, fyAt = {}, curN = {};
     for (const x of (ts && ts.timeseries && ts.timeseries.result) || []) {
       const typ = x.meta && x.meta.type && x.meta.type[0];
       const m = typ && typ.match(/^(annual|trailing|quarterly)(.+)$/);
@@ -624,43 +1059,67 @@ function getFundamentals(sym) {
       if (!key) continue;
       const arr = (x[typ] || []).filter(v => v && v.reportedValue && v.reportedValue.raw != null).sort((a, b) => a.asOfDate.localeCompare(b.asOfDate));
       if (!arr.length) continue;
-      if (m[1] === 'annual') { for (const v of arr) (annualMap[v.asOfDate] = annualMap[v.asOfDate] || { date: v.asOfDate })[key] = v.reportedValue.raw; }
+      for (const v of arr) if (v.currencyCode) curN[v.currencyCode] = (curN[v.currencyCode] || 0) + 1;
+      if (m[1] === 'annual') { for (const v of arr) (annualMap[v.asOfDate] = annualMap[v.asOfDate] || { date: v.asOfDate })[key] = v.reportedValue.raw; fyAt[key] = arr[arr.length - 1].asOfDate; }
       else if (m[1] === 'quarterly') { for (const v of arr) (quarterMap[v.asOfDate] = quarterMap[v.asOfDate] || { date: v.asOfDate })[key] = v.reportedValue.raw; }
       else {
         const lastV = arr[arr.length - 1];
-        ttm[key] = lastV.reportedValue.raw; ttm.date = ttm.date && ttm.date > lastV.asOfDate ? ttm.date : lastV.asOfDate;
+        ttm[key] = lastV.reportedValue.raw; ttmAt[key] = lastV.asOfDate;
         const cutoff = isoDate(Date.parse(lastV.asOfDate) - 300 * 864e5);
         const prev = arr.filter(v => v.asOfDate <= cutoff).pop();
         if (prev) ttmPrev[key] = prev.reportedValue.raw;
       }
     }
+    // a TTM value ~15 months older than the newest statements, or older than the last fiscal year of the same item, is not used
+    // (the last fiscal year takes its place in FA.base); the client lists what was dropped
+    const newest = [...Object.keys(annualMap), ...Object.keys(quarterMap), ...Object.values(ttmAt)].sort().pop();
+    const ttmStale = [];
+    for (const [k, at] of Object.entries(ttmAt)) {
+      const old = newest && Date.parse(newest) - Date.parse(at) > TTM_MAX_AGE, behind = fyAt[k] && fyAt[k] > at;
+      if (old || behind) { ttmStale.push({ key: k, date: at, fy: behind ? fyAt[k] : null }); delete ttm[k]; delete ttmPrev[k]; delete ttmAt[k]; }
+    }
+    ttm.date = Object.values(ttmAt).sort().pop();
     const annual = Object.values(annualMap).sort((a, b) => a.date.localeCompare(b.date)).filter(a => a.revenue != null || a.netIncome != null || a.assets != null).map(fixFcf);
     fixFcf(ttm);
     const quarterly = Object.values(quarterMap).sort((a, b) => a.date.localeCompare(b.date)).slice(-8);
     const price = yraw(fd.currentPrice) ?? yraw(pr.regularMarketPrice);
     const currency = pr.currency || sd.currency;
-    const finCur = fd.financialCurrency || currency;
+    // statement currency: the currency of the items wins over financialCurrency (both shown when they differ)
+    const itemCur = Object.entries(curN).sort((a, b) => b[1] - a[1]).map(e => e[0])[0] || null;
+    const finCur = itemCur || fd.financialCurrency || currency;
+    const finCurYahoo = fd.financialCurrency && fd.financialCurrency !== finCur ? fd.financialCurrency : null;
     // Yahoo quotes some exchanges in a sub-unit (GBp, ZAc, ILA) but market cap, EPS, dividend and statements in the main currency:
     // valuation runs in the main currency, fx converts the statements (finCur) into it
     const [mainCur, unit] = unitNorm(currency);
     let fx = null, fxErr = null, fxStale = null, fxAsOf = null; // fxStale: data time of a stale rate, true when unknown
     try { const c = await fxConv(finCur, mainCur); fx = c.k; fxAsOf = c.t ?? null; if (c.stale) fxStale = c.t ?? true; } catch (e) { fxErr = e.message; }
-    const rfId = RF_SERIES[mainCur] || 'DGS10';
-    const [rfS, aaaS, peerSel] = await Promise.all([
-      fred(rfId, isoDate(Date.now() - 500 * 864e5)).catch(() => null), fred('DAAA', isoDate(Date.now() - 120 * 864e5)).catch(() => null),
-      peerFilter(ap.sector, ap.industry, (((pe && pe.finance && pe.finance.result && pe.finance.result[0] && pe.finance.result[0].recommendedSymbols) || []).map(x => x.symbol)).filter(s => s !== sym).slice(0, 8)),
+    // risk-free rate: the local long-term yield when FRED has a fresh one (≤ ~6 months), else US 10Y; US 10Y and AAA also give the
+    // corporate spread of Graham's formula (local AAA = local rate + US AAA − US 10Y)
+    const rfId = RF_SERIES[mainCur] || null, from = isoDate(Date.now() - 500 * 864e5);
+    const [rfS, usS, aaaS, peerSel] = await Promise.all([
+      rfId && rfId !== 'DGS10' ? fred(rfId, from).catch(() => null) : null, fred('DGS10', from).catch(() => null), fred('DAAA', isoDate(Date.now() - 120 * 864e5)).catch(() => null),
+      peerFilter(ap.sector, ap.industry, (((pe && pe.finance && pe.finance.result && pe.finance.result[0] && pe.finance.result[0].recommendedSymbols) || []).map(x => x.symbol)).filter(s => s !== sym).slice(0, 8),
+        { name: pr.longName || pr.shortName, website: ap.website }),
     ]);
-    const rf = rfS ? rfS[rfS.length - 1][1] : RF_FIXED;
+    const lastObs = s => (s && s.length ? s[s.length - 1] : null);
+    const us = lastObs(usS), loc = rfId === 'DGS10' ? us : lastObs(rfS);
+    const locOld = !!(loc && rfId !== 'DGS10' && Date.now() - Date.parse(loc[0]) > RF_MAX_AGE), useLoc = !!(loc && !locOld);
+    const rfObs = useLoc ? loc : us, rf = rfObs ? rfObs[1] : RF_FIXED;
+    const aaaObs = lastObs(aaaS);
     const trend = ((r.earningsTrend && r.earningsTrend.trend) || []).map(x => ({
       period: x.period, end: x.endDate, growth: yraw(x.growth),
       eps: yraw(x.earningsEstimate && x.earningsEstimate.avg), epsLow: yraw(x.earningsEstimate && x.earningsEstimate.low), epsHigh: yraw(x.earningsEstimate && x.earningsEstimate.high),
       epsYearAgo: yraw(x.earningsEstimate && x.earningsEstimate.yearAgoEps), epsAnalysts: yraw(x.earningsEstimate && x.earningsEstimate.numberOfAnalysts),
+      cur: (x.earningsEstimate && x.earningsEstimate.earningsCurrency) || null,
       rev: yraw(x.revenueEstimate && x.revenueEstimate.avg), revGrowth: yraw(x.revenueEstimate && x.revenueEstimate.growth),
+      // revenue estimates are a component of the default growth (FA.growth): their base, number of analysts and currency are checked
+      revYearAgo: yraw(x.revenueEstimate && x.revenueEstimate.yearAgoRevenue), revAnalysts: yraw(x.revenueEstimate && x.revenueEstimate.numberOfAnalysts),
+      revCur: (x.revenueEstimate && x.revenueEstimate.revenueCurrency) || null,
     }));
     const cal = r.calendarEvents || {};
     const out = {
-      symbol: pr.symbol || sym, name: pr.shortName || pr.longName || sym, longName: pr.longName, type: pr.quoteType, exchange: pr.exchangeName, exchangeName: pr.exchange,
-      currency, mainCur, unit, finCur, fx, fxErr, fxStale, fxAsOf, price, change: yraw(pr.regularMarketChange), changePct: yraw(pr.regularMarketChangePercent) != null ? yraw(pr.regularMarketChangePercent) * 100 : null,
+      symbol: pr.symbol || sym, name: pr.longName || pr.shortName || sym, longName: pr.longName, type: pr.quoteType, exchange: pr.exchangeName, exchangeName: pr.exchange,
+      currency, mainCur, unit, finCur, finCurYahoo, fx, fxErr, fxStale, fxAsOf, price, change: yraw(pr.regularMarketChange), changePct: yraw(pr.regularMarketChangePercent) != null ? yraw(pr.regularMarketChangePercent) * 100 : null,
       marketState: pr.marketState, marketCap: yraw(pr.marketCap) ?? yraw(sd.marketCap),
       profile: { sector: ap.sector, industry: ap.industry, country: ap.country, city: ap.city, employees: ap.fullTimeEmployees, website: ap.website, summary: (ap.longBusinessSummary || '').slice(0, 1600) },
       stats: {
@@ -690,10 +1149,18 @@ function getFundamentals(sym) {
         epsEstimate: yraw(cal.earnings && cal.earnings.earningsAverage), revEstimate: yraw(cal.earnings && cal.earnings.revenueAverage),
         history: ((r.earningsHistory && r.earningsHistory.history) || []).map(x => ({ q: yraw(x.quarter) ? yraw(x.quarter) * 1000 : null, period: x.period, actual: yraw(x.epsActual), estimate: yraw(x.epsEstimate), surprise: yraw(x.surprisePercent) != null ? yraw(x.surprisePercent) * 100 : null })),
       },
-      annual, ttm, ttmPrev, quarterly,
-      // fallback = no FRED series for this currency (US 10Y used instead), fixed = FRED unreachable
-      rf: { rate: rf, series: rfS ? rfId : null, name: rfS ? RF_NAME[rfId] || rfId : 'pevná sazba', date: rfS ? rfS[rfS.length - 1][0] : null, currency: mainCur, fallback: !RF_SERIES[mainCur], fixed: !rfS },
-      aaa: aaaS ? aaaS[aaaS.length - 1][1] : null,
+      annual, ttm, ttmPrev, ttmAt, ttmStale, quarterly,
+      // divsErr: the chart with the dividend events did not load – the dividend check falls back to the statements, cached briefly
+      divs: divHistory(ch, currency), divsErr: ch ? null : `graf s dividendami se nenačetl (${String(chErr || 'chyba').slice(0, 80)})`,
+      // fallback = US 10Y used instead of a local yield: none = FRED has no series for the currency (why), old = the local series is
+      // older than ~6 months (its last observation), err = the local series did not load; fixed = FRED unreachable
+      rf: {
+        rate: rf, series: rfObs ? (useLoc ? rfId : 'DGS10') : null, name: rfObs ? (useLoc ? RF_NAME[rfId] || rfId : 'US 10Y') : 'pevná sazba', date: rfObs ? rfObs[0] : null, currency: mainCur,
+        fallback: mainCur !== 'USD' && !useLoc, fixed: !rfObs, none: rfId ? null : RF_NONE[mainCur] || 'FRED pro tuto měnu nemá řadu dlouhodobých výnosů',
+        old: locOld ? { series: rfId, name: RF_NAME[rfId] || rfId, date: loc[0], rate: loc[1] } : null, err: !!(rfId && rfId !== 'DGS10' && !rfS),
+      },
+      us10: us ? { rate: us[1], date: us[0] } : null,
+      aaa: aaaObs ? aaaObs[1] : null, aaaDate: aaaObs ? aaaObs[0] : null,
       tech: ch && ch.c.length ? technicals(ch, rf) : null,
       peers: peerSel.peers, peerInfo: peerSel.peerInfo, peersErr: peerSel.peersErr,
       updated: Date.now(),
@@ -1200,6 +1667,8 @@ function parseFeed(xml, feed) {
     let link = cleanText(xmlTag(b, 'link'));
     if (!/^https?:/i.test(link)) { const m = b.match(/<link\b[^>]*href=["']([^"']+)["']/i); link = m ? decodeEntities(m[1]) : ''; }
     if (!/^https?:/i.test(link)) { const g = cleanText(xmlTag(b, 'guid')); if (/^https?:/i.test(g)) link = g; }
+    link = link.trim();
+    if (!/^https?:\/\/[^\s"'<>]+$/i.test(link)) link = ''; // only http(s) links (Atom href may carry javascript: or data:)
     const dateStr = cleanText(xmlTag(b, 'pubDate') || xmlTag(b, 'dc:date') || xmlTag(b, 'published') || xmlTag(b, 'updated'));
     const id = hash(link || title);
     let ts = Date.parse(dateStr);
@@ -1324,6 +1793,9 @@ async function notifyAll(title, message, opts = {}) {
 
 // ───────────────────────────── Alerts engine ─────────────────────────────
 const fmtNum = v => (Math.abs(v) >= 1000 ? v.toFixed(2) : Math.abs(v) >= 1 ? v.toFixed(4).replace(/0+$/, '').replace(/\.$/, '') : v.toPrecision(4));
+// Yahoo's exchange names in a readable form (NYSEArca → NYSE Arca, NasdaqGS → Nasdaq)
+const EXCH_NAME = { NYSEArca: 'NYSE Arca', NasdaqGS: 'Nasdaq', NasdaqGM: 'Nasdaq', NasdaqCM: 'Nasdaq', NYQ: 'NYSE', PCX: 'NYSE Arca', NMS: 'Nasdaq', CCC: 'CoinMarketCap', CCY: 'Forex' };
+const exchName = e => EXCH_NAME[e] || String(e || '');
 let alertsRunning = false;
 async function runAlerts() {
   if (alertsRunning) return;
@@ -1334,8 +1806,11 @@ async function runAlerts() {
     const quotes = await getQuotes([...new Set(items.map(a => String(a.symbol).toUpperCase()))]);
     let changed = false;
     for (const a of items) {
-      const q = quotes[String(a.symbol).toUpperCase()];
-      if (!q || q.price == null || q.stale) continue;
+      const sym = String(a.symbol).toUpperCase(), q = quotes[sym];
+      // a symbol Yahoo does not know never fires; the flag tells the UI (cleared as soon as a quote exists)
+      if (!q || q.price == null) { if (!q && badSym.has(sym) && !a.noQuote) { a.noQuote = Date.now(); changed = true; } continue; }
+      if (a.noQuote) { delete a.noQuote; changed = true; }
+      if (q.stale) continue;
       const v = +a.value;
       let hit = false, desc = '';
       if (a.cond === 'above') { hit = q.price >= v; desc = `cena ≥ ${v}`; }
@@ -1350,10 +1825,13 @@ async function runAlerts() {
       a.count = (a.count || 0) + 1;
       if (!a.repeat) a.active = false;
       changed = true;
-      const msg = `${a.symbol} = ${fmtNum(q.price)} ${q.currency || ''} (${q.changePct >= 0 ? '+' : ''}${(q.changePct || 0).toFixed(2)} %) – ${desc}${a.note ? ' · ' + a.note : ''}`;
+      // the name and exchange of what is really watched: an old alert on "BTC" says Grayscale Bitcoin Mini Trust, not bitcoin
+      const name = cleanName(q.name || a.name || ''), exch = exchName(q.exchange || a.exchange || '');
+      const label = `${a.symbol}${name && name.toUpperCase() !== sym ? ` (${[name, exch].filter(Boolean).join(', ')})` : exch ? ` (${exch})` : ''}`;
+      const msg = `${label} = ${fmtNum(q.price)} ${q.currency || ''} (${q.changePct >= 0 ? '+' : ''}${(q.changePct || 0).toFixed(2)} %) – ${desc}${a.note ? ' · ' + a.note : ''}`;
       pushEvent({ type: 'alert', title: `🔔 Alert ${a.symbol}`, message: msg, alertId: a.id, symbol: a.symbol, price: q.price });
       state.alerts.history = [{ id: hash(a.id + a.triggeredAt), alertId: a.id, symbol: a.symbol, ts: a.triggeredAt, price: q.price, message: msg }, ...(state.alerts.history || [])].slice(0, 200);
-      notifyAll(`🔔 FinTerm alert: ${a.symbol}`, msg, { priority: 'high', tags: 'bell', data: { symbol: a.symbol, price: q.price } }).catch(() => {});
+      notifyAll(`🔔 FinTerm alert: ${label}`, msg, { priority: 'high', tags: 'bell', data: { symbol: a.symbol, name: name || null, exchange: exch || null, currency: q.currency || null, price: q.price } }).catch(() => {});
     }
     if (changed) saveState();
   } finally {
@@ -1375,11 +1853,49 @@ function localDate(ts, tz) {
   return f.format(ts);
 }
 
-const CG_MAP = { bitcoin: 'BTC-USD', ethereum: 'ETH-USD', solana: 'SOL-USD', ripple: 'XRP-USD', cardano: 'ADA-USD', dogecoin: 'DOGE-USD', binancecoin: 'BNB-USD', tron: 'TRX-USD', chainlink: 'LINK-USD', 'avalanche-2': 'AVAX-USD', polkadot: 'DOT-USD', litecoin: 'LTC-USD', 'bitcoin-cash': 'BCH-USD', monero: 'XMR-USD', stellar: 'XLM-USD', 'shiba-inu': 'SHIB-USD', cosmos: 'ATOM-USD', 'matic-network': 'POL-USD', uniswap: 'UNI-USD', 'ethereum-classic': 'ETC-USD' };
-async function cgToYahoo(id) {
-  if (CG_MAP[id]) return CG_MAP[id];
-  try { const m = (await getCryptoMarkets()).find(c => c.id === id); if (m) return m.symbol.toUpperCase() + '-USD'; } catch { /* offline */ }
-  return null;
+// CoinGecko ids with a regular Yahoo quote (checked 11. 11. 2026). Every other id (uniswap, matic-network, sui, pepe…:
+// Yahoo has them only under numbered symbols like UNI7083-USD) is priced through CoinGecko as CG:<id>.
+const CG_MAP = { bitcoin: 'BTC-USD', ethereum: 'ETH-USD', solana: 'SOL-USD', ripple: 'XRP-USD', cardano: 'ADA-USD', dogecoin: 'DOGE-USD', binancecoin: 'BNB-USD', tron: 'TRX-USD', chainlink: 'LINK-USD', 'avalanche-2': 'AVAX-USD', polkadot: 'DOT-USD', litecoin: 'LTC-USD', 'bitcoin-cash': 'BCH-USD', monero: 'XMR-USD', stellar: 'XLM-USD', 'shiba-inu': 'SHIB-USD', cosmos: 'ATOM-USD', 'ethereum-classic': 'ETC-USD' };
+const CG_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+// EOD Historical Data exchange codes → Yahoo suffixes ('' = USA); CC = crypto, FOREX, INDX
+const EOD_SFX = {
+  US: '', NYSE: '', NASDAQ: '', XETRA: 'DE', F: 'F', BE: 'BE', DU: 'DU', HM: 'HM', HA: 'HA', MU: 'MU', STU: 'SG', LSE: 'L', IL: 'IL', PA: 'PA', AS: 'AS', BR: 'BR', LS: 'LS', IR: 'IR',
+  MI: 'MI', MC: 'MC', SW: 'SW', VX: 'SW', VI: 'VI', PR: 'PR', WAR: 'WA', BUD: 'BD', ST: 'ST', CO: 'CO', HE: 'HE', OL: 'OL', IC: 'IC', TO: 'TO', V: 'V', NEO: 'NE', AU: 'AX',
+  HK: 'HK', TSE: 'T', KO: 'KS', KQ: 'KQ', TW: 'TW', TWO: 'TWO', SHG: 'SS', SHE: 'SZ', NSE: 'NS', BSE: 'BO', SA: 'SA', MX: 'MX', JSE: 'JO', TA: 'TA', SG: 'SI', JK: 'JK', KLSE: 'KL', BK: 'BK', IS: 'IS', AT: 'AT',
+};
+const ISO_CUR = new Set(['USD', 'EUR', 'CZK', 'GBP', 'CHF', 'JPY', 'PLN', 'HUF', 'SEK', 'NOK', 'DKK', 'ISK', 'CAD', 'AUD', 'NZD', 'HKD', 'SGD', 'CNY', 'CNH', 'INR', 'KRW', 'TWD', 'BRL', 'MXN', 'ZAR', 'ILS', 'TRY', 'THB', 'IDR', 'MYR', 'PHP', 'RON', 'BGN', 'AED', 'SAR', 'RUB']);
+// Ghostfolio asset classes of manual assets → the classes used by the portfolio
+const GF_TYPE = { ETF: 'ETF', MUTUALFUND: 'MUTUALFUND', STOCK: 'EQUITY', CRYPTOCURRENCY: 'CRYPTOCURRENCY', PRECIOUS_METAL: 'FUTURE', COMMODITY: 'FUTURE', BOND: 'BOND' };
+// Ghostfolio symbol → { y, alt } (alt = other spellings, decided by a Yahoo quote)
+function gfSymbol(ds, sym, prof) {
+  const s = String(sym || '').trim();
+  if (!s) return { y: null };
+  if (ds === 'COINGECKO') { const id = s.toLowerCase(); return { y: CG_MAP[id] || (CG_ID.test(id) ? 'CG:' + id : null), cg: !CG_MAP[id] }; }
+  if (ds === 'MANUAL') return { y: 'MANUAL:' + s, manual: true };
+  const u = s.toUpperCase();
+  if (ds === 'EOD_HISTORICAL_DATA' || ds === 'EODHD') {
+    const m = /^(.+)\.([A-Z]+)$/.exec(u);
+    if (m && m[2] === 'CC') return { y: m[1] };                        // BTC-USD.CC
+    if (m && m[2] === 'FOREX') return { y: m[1].replace(/=X$/, '') + '=X' }; // EURUSD.FOREX
+    if (m && m[2] === 'INDX') return { y: '^' + m[1] };                 // GSPC.INDX
+    if (m && m[2] in EOD_SFX) return { y: EOD_SFX[m[2]] ? `${m[1]}.${EOD_SFX[m[2]]}` : m[1] };
+    return { y: u };
+  }
+  // YAHOO, FINANCIAL_MODELING_PREP and others: Ghostfolio stores crypto as BTCUSD (convertFromYahooFinanceSymbol)
+  // and currency pairs without =X
+  const sub = String((prof && prof.assetSubClass) || '').toUpperCase();
+  if (/^[A-Z0-9]{2,15}USD$/.test(u) && sub === 'CRYPTOCURRENCY') return { y: u.slice(0, -3) + '-USD' };
+  if (/^[A-Z]{6}$/.test(u) && ISO_CUR.has(u.slice(0, 3)) && ISO_CUR.has(u.slice(3))) return { y: u + '=X' };
+  if (/^[A-Z0-9]{2,15}USD$/.test(u) && !sub) return { y: u, alt: [u.slice(0, -3) + '-USD'] };
+  return { y: u };
+}
+function gfPrices(md) {
+  const by = new Map();
+  for (const p of Array.isArray(md) ? md : []) {
+    const ts = Date.parse(p && p.date), v = +(p && (p.marketPrice ?? p.price));
+    if (Number.isFinite(ts) && v > 0) by.set(isoDate(ts), v);
+  }
+  return [...by.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 }
 
 async function convertGhostfolio(j) {
@@ -1389,21 +1905,96 @@ async function convertGhostfolio(j) {
     return { id: a.id, name: a.name || 'Účet', currency: a.currency || 'USD', balance: +bal || 0, excluded: !!a.isExcluded };
   });
   const accName = Object.fromEntries(accounts.map(a => [a.id, a.name]));
-  const out = [], unknown = [];
-  for (const a of j.activities) {
-    const type = String(a.type || '').toUpperCase();
+  // asset profiles (name, currency, class, market data of manual assets) by data source + symbol
+  const profs = new Map();
+  for (const p of Array.isArray(j.assetProfiles) ? j.assetProfiles : []) if (p && p.symbol) profs.set(`${String(p.dataSource || '').toUpperCase()}:${p.symbol}`, p);
+  const rows = j.activities.map(a => {
     const ds = String(a.dataSource || (a.SymbolProfile && a.SymbolProfile.dataSource) || 'YAHOO').toUpperCase();
-    const sym = a.symbol || (a.SymbolProfile && a.SymbolProfile.symbol) || '';
-    let y = ds === 'COINGECKO' ? await cgToYahoo(sym) : ds === 'MANUAL' ? 'MANUAL:' + sym : String(sym).toUpperCase();
-    if (!y) { unknown.push(`${ds}:${sym}`); y = 'MANUAL:' + sym; }
+    const sym = String(a.symbol || (a.SymbolProfile && a.SymbolProfile.symbol) || '');
+    const prof = profs.get(`${ds}:${sym}`) || a.SymbolProfile || null;
+    return { a, ds, sym, prof, map: gfSymbol(ds, sym, prof) };
+  });
+  // every market symbol is checked by a quote; a spelling Yahoo does not know is replaced by the alternative that it knows
+  const check = [...new Set(rows.flatMap(r => (r.map.y && !/^(MANUAL|CG):/.test(r.map.y) ? [r.map.y, ...(r.map.alt || [])] : [])))].filter(s => SYM_RE.test(s));
+  const qs = check.length ? await getQuotes(check).catch(() => ({})) : {};
+  const cgIds = [...new Set(rows.filter(r => r.map.y && r.map.y.startsWith('CG:')).map(r => r.map.y.slice(3)))];
+  // CoinGecko in parallel and briefly: an outage costs the import a few seconds, not 35 s (the client is waiting). A price
+  // that arrives later still clears its "CoinGecko cenu nevrátil" note (cgSettle)
+  const cgP = cgIds.length ? cgSimple(cgIds).catch(() => null) : null;
+  const [cgNow, cgList] = cgIds.length ? await Promise.all([timeoutP(cgP, CG_WAIT, null), timeoutP(getCryptoMarkets().catch(() => []), CG_WAIT, [])]) : [null, []];
+  if (cgP && !cgNow) cgP.then(cgSettle);
+  const out = [], unknown = new Set(), manual = {}, cg = {};
+  for (const { a, ds, sym, prof, map } of rows) {
+    const type = String(a.type || '').toUpperCase();
+    let y = map.y, label = null;
+    const tag = `${ds}:${sym}`;
+    if (!y) { unknown.add(`${tag} – neznámý symbol`); y = 'MANUAL:' + sym; }
+    else if (y.startsWith('MANUAL:')) {
+      const prices = gfPrices(prof && prof.marketData);
+      label = (prof && cleanName(prof.name)) || null;
+      manual[y] = { name: label, currency: (prof && prof.currency) || a.currency || null, type: GF_TYPE[String((prof && (prof.assetSubClass || prof.assetClass)) || '').toUpperCase()] || null, prices };
+      if (!prices.length && ['BUY', 'SELL', 'ITEM', 'LIABILITY'].includes(type)) unknown.add(`${label || tag} – bez tržní ceny v Ghostfoliu, oceněno transakční cenou`);
+    } else if (y.startsWith('CG:')) {
+      // name and ticker: CoinGecko's list, else Ghostfolio's profile, else the id ("matic-network" → "Matic Network");
+      // stored with the import, so the portfolio stays readable while CoinGecko is down
+      const id = y.slice(3), m = (cgList || []).find(c => c.id === id), pn = prof && cleanName(prof.name);
+      cg[id] = { name: (m && m.name) || (pn && pn.toLowerCase() !== id ? pn : null) || cgPretty(id), symbol: (m && m.symbol) || (cg[id] && cg[id].symbol) || null };
+      label = cg[id].symbol || cg[id].name;
+      if (!(cgNow && cgNow[id] && cgNow[id].usd > 0)) unknown.add(`${tag}${CG_MISS}`);
+    } else if (!qs[y]) {
+      const alt = (map.alt || []).find(s => qs[s]);
+      if (alt) y = alt;
+      else if (badSym.has(y)) unknown.add(`${tag} – Yahoo symbol ${y} nezná, oceněno transakční cenou`);
+    }
     const ts = Date.parse(a.date);
+    const cur = a.currency || (prof && prof.currency) || null;
+    if (!cur) unknown.add(`${tag} – chybí měna, použito USD`);
     out.push({
       id: 'gf-' + hash(JSON.stringify([a.id || '', a.date, sym, type, a.quantity, a.unitPrice, a.accountId])), date: Number.isFinite(ts) ? localDate(ts) : String(a.date).slice(0, 10),
       type, symbol: y, origSymbol: sym, dataSource: ds, qty: +a.quantity || 0, price: +a.unitPrice || 0, fee: +a.fee || 0,
-      currency: a.currency || (a.SymbolProfile && a.SymbolProfile.currency) || 'USD', account: accName[a.accountId] || '', comment: a.comment || '', source: 'ghostfolio',
+      currency: cur || 'USD', account: accName[a.accountId] || '', comment: a.comment || '', source: 'ghostfolio', ...(label ? { label } : {}),
     });
   }
-  return { activities: out, accounts, unknown, baseCurrency: (j.user && j.user.settings && j.user.settings.currency) || null, meta: j.meta || null };
+  return { activities: out, accounts, unknown: [...unknown], manual, cg, baseCurrency: (j.user && j.user.settings && j.user.settings.currency) || null, meta: j.meta || null };
+}
+// CoinGecko prices for ids Yahoo does not quote (the public API gives at most 365 days of history)
+const CG_WAIT = 6000; // how long the import / sync waits for CoinGecko (the request itself may finish later)
+const CG_MISS = ' – CoinGecko cenu nevrátil';
+const cgPretty = id => String(id).split('-').filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
+// display name of a CoinGecko coin: "Uniswap (UNI)" – from the market list, the import, or the id
+function cgName(id, list) {
+  const m = (list || []).find(c => c.id === id), st = ext.cg && ext.cg[id];
+  const name = (m && m.name) || (st && st.name) || cgPretty(id), sym = (m && m.symbol) || (st && st.symbol) || null;
+  return sym && sym.toLowerCase() !== name.toLowerCase() ? `${name} (${sym})` : name;
+}
+// a price that arrived (analysis, refresh, a late answer after an import or sync) clears the "CoinGecko cenu nevrátil" note
+function cgSettle(prices) {
+  if (!prices || !Array.isArray(ext.unknown) || !ext.unknown.length) return;
+  const keep = ext.unknown.filter(u => {
+    const m = String(u).endsWith(CG_MISS) && /^COINGECKO:(.+)$/.exec(String(u).slice(0, -CG_MISS.length));
+    const id = m && m[1].toLowerCase();
+    return !(id && prices[id] && prices[id].usd > 0);
+  });
+  if (keep.length === ext.unknown.length) return;
+  ext.unknown = keep;
+  writeJSONAtomic(EXT_FILE, ext); // not saveExt: the analysis cache does not depend on the notes
+}
+function cgSimple(ids) {
+  const list = [...new Set(ids)].filter(id => CG_ID.test(id)).sort();
+  return cached('cg:simple:' + list.join(','), 60e3, async () => {
+    const j = await fetchJSON(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(list.join(','))}&vs_currencies=usd&include_24hr_change=true&include_last_updated_at=true`, { timeout: 12000 });
+    mark('coingecko', true);
+    return j || {};
+  });
+}
+function cgHistory(id, days) {
+  const d = days <= 90 ? 90 : 365;
+  return cached(`cg:hist:${id}:${d}`, 3 * 3600e3, async () => {
+    const j = await fetchJSON(`https://api.coingecko.com/api/v3/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=${d}&interval=daily`, { timeout: 20000 });
+    const px = (j.prices || []).filter(p => Array.isArray(p) && p[1] > 0);
+    mark('coingecko', true);
+    return { symbol: 'CG:' + id, currency: 'USD', tz: 'UTC', t: px.map(p => p[0]), c: px.map(p => p[1]), o: px.map(p => p[1]), h: px.map(p => p[1]), l: px.map(p => p[1]), v: px.map(() => 0), splits: [], meta: { type: 'CRYPTOCURRENCY' } };
+  });
 }
 
 // Ghostfolio REST API (self-hosted): POST /api/v1/auth/anonymous {accessToken} → JWT, GET /api/v1/export → activities
@@ -1466,7 +2057,9 @@ function profileOf(sym) {
     const r = (j && j.quoteSummary && j.quoteSummary.result && j.quoteSummary.result[0]) || {};
     const ap = r.assetProfile || {}, th = r.topHoldings || {}, sw = {};
     for (const o of th.sectorWeightings || []) for (const [k, v] of Object.entries(o)) { const w = yraw(v); if (w > 0) { const n = ETF_SECTOR[k] || k; sw[n] = (sw[n] || 0) + w; } }
-    return { sector: ap.sector || null, industry: ap.industry || null, country: ap.country || null, sectorWeights: Object.keys(sw).length ? sw : null, category: (r.fundProfile && r.fundProfile.categoryName) || null };
+    // name and website identify other listings of the same firm among valuation peers (peerFilter)
+    return { sector: ap.sector || null, industry: ap.industry || null, country: ap.country || null, sectorWeights: Object.keys(sw).length ? sw : null, category: (r.fundProfile && r.fundProfile.categoryName) || null,
+      name: (r.quoteType && (r.quoteType.longName || r.quoteType.shortName)) || null, website: ap.website || null };
   });
 }
 function etfRegion(name) {
@@ -1487,7 +2080,7 @@ function allActivities() {
     .sort((x, y) => x.date.localeCompare(y.date) || (x.type === 'SELL') - (y.type === 'SELL'));
 }
 
-const CLASS_OF = { EQUITY: 'Akcie', ETF: 'ETF', CRYPTOCURRENCY: 'Krypto', MUTUALFUND: 'Fondy', FUTURE: 'Komodity', CURRENCY: 'Měny', INDEX: 'Index' };
+const CLASS_OF = { EQUITY: 'Akcie', ETF: 'ETF', CRYPTOCURRENCY: 'Krypto', MUTUALFUND: 'Fondy', FUTURE: 'Komodity', CURRENCY: 'Měny', INDEX: 'Index', BOND: 'Dluhopisy' };
 // a daily chart aligned to calendar days: the close of that day, else of the last trading day before it (also for the first
 // portfolio day, e.g. a Saturday – never the first close of the whole series); before the first bar the first close
 function alignDaily(x, days, val = i => x.c[i]) {
@@ -1505,9 +2098,17 @@ function xirr(flows) {
   return (lo + hi) / 2;
 }
 
+// analysis cache: the key is the content (activities, accounts, manual prices, time zone), not the time; short lifetime and
+// at most PFA_MAX entries, so a client polling for days does not pile up results
+const PFA_MAX = 6;
+function prunePfa(keep) {
+  const list = [...cache.entries()].filter(([k]) => k.startsWith('pfa:') && k !== keep).sort((a, b) => b[1].t - a[1].t);
+  for (const [k] of list.slice(PFA_MAX - 1)) cache.delete(k);
+}
 async function portfolioAnalysis(base, bench) {
   const acts = allActivities();
-  const key = `pfa:${base}:${bench}:${hash(JSON.stringify(acts.map(a => [a.id, a.date, a.type, a.symbol, a.qty, a.price])))}:${Math.floor(Date.now() / 60e3)}`;
+  const key = `pfa:${base}:${bench}:${hash(JSON.stringify([acts, ext.accounts || [], ext.manual || {}, (state.settings && state.settings.timezone) || '']))}`;
+  prunePfa(key);
   return cached(key, v => (v.fx && (v.fx.missing.length || v.fx.stale.length) ? 15e3 : 60e3), async () => {
     const cashAcc = (ext.accounts || []).filter(a => a.balance > 0 && !a.excluded);
     if (!acts.length && !cashAcc.length) return { empty: true, base };
@@ -1517,14 +2118,42 @@ async function portfolioAnalysis(base, bench) {
     for (let t = Date.parse(first + 'T12:00:00Z'); ; t += 864e5) { const d = isoDate(t); days.push(d); if (d >= today) break; if (days.length > 6000) break; }
     const range = rangeFor(days.length);
     const syms = [...new Set(acts.filter(a => ['BUY', 'SELL', 'ITEM', 'LIABILITY'].includes(a.type)).map(a => a.symbol))];
-    const market = syms.filter(s => !/^(CASH|MANUAL):/.test(s));
-    const [quotes, charts, profiles] = await Promise.all([
+    const market = syms.filter(s => !/^(CASH|MANUAL|CG):/.test(s));
+    const cgSyms = syms.filter(s => s.startsWith('CG:'));
+    // CoinGecko is bounded in time: while it is down the coins are valued at the purchase price (flagged), not after 40 s
+    const [quotes, charts, profiles, cgNow, cgCharts, cgList] = await Promise.all([
       getQuotes(market).catch(() => ({})),
       mapLimit(market, 4, s => getChart(s, range, '1d')),
       mapLimit(market, 3, s => getProfile(s)),
+      cgSyms.length ? timeoutP(cgSimple(cgSyms.map(s => s.slice(3))).catch(() => null), 10000, null) : null,
+      timeoutP(mapLimit(cgSyms, 2, s => cgHistory(s.slice(3), days.length)), 12000, []),
+      cgSyms.length ? timeoutP(getCryptoMarkets().catch(() => []), 10000, []) : [],
     ]);
+    cgSettle(cgNow);
     const ch = {}, prof = {};
     market.forEach((s, i) => { ch[s] = charts[i]; prof[s] = profiles[i] || {}; });
+    // CoinGecko-priced crypto: history and the current price (USD)
+    cgSyms.forEach((s, i) => {
+      const id = s.slice(3), p = cgNow && cgNow[id];
+      if (cgCharts[i] && cgCharts[i].c.length) ch[s] = cgCharts[i];
+      prof[s] = {};
+      if (p && p.usd > 0) {
+        const pct = Number.isFinite(p.usd_24h_change) ? p.usd_24h_change : null;
+        quotes[s] = { symbol: s, name: cgName(id, cgList), price: p.usd, currency: 'USD', type: 'CRYPTOCURRENCY', changePct: pct, change: pct != null ? p.usd - p.usd / (1 + pct / 100) : null, time: p.last_updated_at ? p.last_updated_at * 1000 : null };
+      }
+    });
+    // manual assets from Ghostfolio: the market data of their asset profile (name, currency, last price)
+    for (const s of syms.filter(s => s.startsWith('MANUAL:'))) {
+      const mi = ext.manual && ext.manual[s];
+      prof[s] = {};
+      if (!mi || !mi.prices || !mi.prices.length) continue;
+      const t = mi.prices.map(p => Date.parse(p[0] + 'T12:00:00Z')), c = mi.prices.map(p => p[1]);
+      ch[s] = { symbol: s, currency: mi.currency || undefined, tz: 'UTC', t, c, o: c, h: c, l: c, v: c.map(() => 0), splits: [], meta: { type: mi.type || 'MANUAL' }, manual: true };
+    }
+    // display names: manual assets by their Ghostfolio name (never the UUID alone), CoinGecko coins by their ticker and
+    // "Uniswap (UNI)" (also while CoinGecko is down: the import stored name and ticker)
+    const manualName = s => (s.startsWith('MANUAL:') ? (ext.manual && ext.manual[s] && ext.manual[s].name) || null : s.startsWith('CG:') ? cgName(s.slice(3), cgList) : null);
+    const labelOf = s => (s.startsWith('MANUAL:') ? manualName(s) || 'Ruční aktivum ' + s.slice(7, 15) : s.startsWith('CG:') ? (((cgList || []).find(c => c.id === s.slice(3)) || {}).symbol || (ext.cg && ext.cg[s.slice(3)] && ext.cg[s.slice(3)].symbol) || cgPretty(s.slice(3))) : null);
     // currency of each holding (quote currency wins), constant for manual/cash
     const lastActPrice = {}, actCur = {};
     for (const a of acts) if (['BUY', 'SELL', 'ITEM', 'LIABILITY'].includes(a.type)) { lastActPrice[a.symbol] = a.price; actCur[a.symbol] = a.currency; }
@@ -1586,7 +2215,7 @@ async function portfolioAnalysis(base, bench) {
     // data-quality: trades priced far away from that day's market close
     const warnings = [];
     for (const a of acts) {
-      if ((a.type !== 'BUY' && a.type !== 'SELL') || !ch[a.symbol] || unitNorm(a.currency)[0] !== unitNorm(curOf(a.symbol))[0]) continue;
+      if ((a.type !== 'BUY' && a.type !== 'SELL') || !ch[a.symbol] || ch[a.symbol].manual || unitNorm(a.currency)[0] !== unitNorm(curOf(a.symbol))[0]) continue;
       const i = days.indexOf(a.date), mk = i >= 0 ? pxArr[a.symbol][i] * unitNorm(curOf(a.symbol))[1] / unitNorm(a.currency)[1] : null;
       if (mk > 0 && a.price > 0 && Math.abs(a.price / mk - 1) > 0.25) warnings.push({ date: a.date, symbol: a.symbol, type: a.type, qty: a.qty, price: a.price, market: mk, dev: (a.price / mk - 1) * 100, currency: a.currency, source: a.source });
     }
@@ -1659,20 +2288,22 @@ async function portfolioAnalysis(base, bench) {
       if (!x || fxBadSym.has(s)) continue;
       const cur = curOf(s), fxNow = fxAt(cur, li), q = quotes[s] || {}, p = prof[s] || {};
       const price = pxArr[s][li], value = x.qty * price * fxNow;
-      if (Math.abs(x.qty) < 1e-9) { if (x.realized || x.div) closed.push({ symbol: s, name: q.name || s, realized: x.realized, dividends: x.div }); continue; }
-      const type = s.startsWith('CASH:') ? 'CASH' : q.type || (ch[s] && ch[s].meta && ch[s].meta.type) || (s.startsWith('MANUAL:') ? 'MANUAL' : null);
+      if (Math.abs(x.qty) < 1e-9) { if (x.realized || x.div) closed.push({ symbol: s, name: q.name || manualName(s) || s, ...(labelOf(s) ? { label: labelOf(s) } : {}), realized: x.realized, dividends: x.div }); continue; }
+      const type = s.startsWith('CASH:') ? 'CASH' : s.startsWith('CG:') ? 'CRYPTOCURRENCY' : q.type || (ch[s] && ch[s].meta && ch[s].meta.type) || (s.startsWith('MANUAL:') ? 'MANUAL' : null);
       const cls = type === 'CASH' ? 'Hotovost' : type === 'MANUAL' ? 'Ostatní' : CLASS_OF[type] || 'Ostatní';
       const sector = cls === 'Krypto' ? 'Krypto' : cls === 'Hotovost' ? 'Hotovost' : cls === 'ETF' || cls === 'Fondy' ? (p.sectorWeights ? null : 'ETF / fondy') : SECTOR_CS[p.sector] || p.sector || 'Neznámý';
-      const country = cls === 'Krypto' ? 'Krypto' : cls === 'Hotovost' ? 'Hotovost' : cls === 'ETF' || cls === 'Fondy' ? etfRegion(q.name || q.longName) : COUNTRY_CS[p.country] || p.country || 'Neznámá';
+      const country = cls === 'Krypto' ? 'Krypto' : cls === 'Hotovost' ? 'Hotovost' : cls === 'ETF' || cls === 'Fondy' ? etfRegion(q.longName || q.name || manualName(s)) : COUNTRY_CS[p.country] || p.country || 'Neznámá';
       const dayB = q && isFinite(q.change) ? x.qty * q.change * fxNow : 0;
       const dy = isFinite(q.divYield) ? q.divYield : null;
       const pdiv = dy ? value * dy / 100 : 0;
       const years = (Date.now() - Date.parse(x.first + 'T12:00:00Z')) / (365 * 864e5);
       const irr = years >= 0.25 ? xirr([...x.flows, { t: Date.now(), v: value }]) : null;
       holdings.push({
-        symbol: s, name: s.startsWith('CASH:') ? 'Hotovost ' + cur : q.longName || q.name || (s.startsWith('MANUAL:') ? s.slice(7) : s), type, cls, sector, sectorWeights: sector === null ? p.sectorWeights : null, country, currency: cur,
+        symbol: s, name: s.startsWith('CASH:') ? 'Hotovost ' + cur : q.longName || q.name || manualName(s) || s, ...(labelOf(s, q) ? { label: labelOf(s, q) } : {}), type, cls, sector, sectorWeights: sector === null ? p.sectorWeights : null, country, currency: cur,
         accounts: [...x.accounts], qty: x.qty, avg: x.qty ? x.costL / x.qty : null, actCurrency: actCur[s], price, value, cost: x.costB, pl: value - x.costB, plPct: x.costB > 0 ? (value - x.costB) / x.costB * 100 : null,
-        dayChange: dayB, dayPct: q.changePct ?? null, realized: x.realized, dividends: x.div, fees: x.fees, first: x.first, irr, divYield: dy, projDiv: pdiv, noQuote: !s.startsWith('CASH:') && !s.startsWith('MANUAL:') && !quotes[s],
+        dayChange: dayB, dayPct: q.changePct ?? null, realized: x.realized, dividends: x.div, fees: x.fees, first: x.first, irr, divYield: dy, projDiv: pdiv,
+        // valued without a market price (purchase price) – never silently: X-ray lists these
+        noQuote: s.startsWith('CASH:') ? false : s.startsWith('MANUAL:') ? !(ch[s] && ch[s].c.length) : !quotes[s],
         ...fxFlag(cur),
       });
       total += value; dayChg += dayB; projDiv += pdiv;
@@ -1696,7 +2327,7 @@ async function portfolioAnalysis(base, bench) {
       const la = acts.filter(a => a.type === 'LIABILITY' && a.symbol === s), market = !!(ch[s] && ch[s].c.length), cur = market ? curOf(s) : la[la.length - 1].currency;
       if (fxBadSym.has(s) || la.some(a => fxMissing(a.currency))) continue;
       const value = market ? la.reduce((t, a) => t + a.qty, 0) * pxArr[s][li] * fxAt(cur, li) : la.reduce((t, a) => t + a.qty * a.price * fxAt(a.currency, li), 0);
-      liabilities.push({ symbol: s, name: s.startsWith('MANUAL:') ? s.slice(7) : (quotes[s] && (quotes[s].longName || quotes[s].name)) || s, currency: cur, value, first: la[0].date, ...fxFlag(cur) });
+      liabilities.push({ symbol: s, name: s.startsWith('MANUAL:') ? manualName(s) || s.slice(7) : (quotes[s] && (quotes[s].longName || quotes[s].name)) || s, ...(labelOf(s) ? { label: labelOf(s) } : {}), currency: cur, value, first: la[0].date, ...fxFlag(cur) });
       liabTotal += value;
     }
     liabilities.sort((a, b) => b.value - a.value);
@@ -1712,7 +2343,7 @@ async function portfolioAnalysis(base, bench) {
     // allocations
     const agg = fn => { const m = {}; for (const x of holdings) for (const [k, v] of fn(x)) m[k] = (m[k] || 0) + v; return Object.entries(m).map(([label, value]) => ({ label, value, pct: total ? value / total * 100 : 0 })).sort((a, b) => b.value - a.value); };
     const alloc = {
-      holding: holdings.map(x => ({ label: x.symbol.replace(/^CASH:/, 'Hotovost ').replace(/^MANUAL:/, ''), value: x.value, pct: x.weight })),
+      holding: holdings.map(x => ({ label: x.label || x.symbol.replace(/^CASH:/, 'Hotovost ').replace(/^MANUAL:/, ''), value: x.value, pct: x.weight })),
       cls: agg(x => [[x.cls, x.value]]),
       sector: agg(x => (x.sectorWeights ? Object.entries(x.sectorWeights).map(([k, w]) => [k, x.value * w / Object.values(x.sectorWeights).reduce((s, y) => s + y, 0)]) : [[x.sector || 'ETF / fondy', x.value]])),
       country: agg(x => [[x.country, x.value]]),
@@ -1747,15 +2378,22 @@ async function portfolioAnalysis(base, bench) {
       },
       holdings, closed, alloc, series: ds, divMonths, warnings, unknown: ext.unknown || [], liabilities, fx: fxNote, benchErr, splitAdj, splitWarn,
     };
-  });
+  }, 10 * 60e3);
 }
 
 // ───────────────────────────── Own Bitcoin node (RPC) ─────────────────────────────
+// host:port of a URL (default port by scheme), '' when not a URL
+function hostPort(u) {
+  try { const x = new URL(String(u || '').trim()); return `${x.hostname.toLowerCase()}:${x.port || (x.protocol === 'https:' ? '443' : '80')}`; } catch { return ''; }
+}
 function btcConf() {
   const s = (state.settings && state.settings.bitcoin) || {};
   const host = process.env.BITCOIN_RPC_HOST, port = process.env.BITCOIN_RPC_PORT || '8332';
-  const url = String(s.rpcUrl || (host ? `http://${host}:${port}` : '')).trim().replace(/\/+$/, '');
-  const user = s.rpcUser || process.env.BITCOIN_RPC_USER || '', pass = s.rpcPass || process.env.BITCOIN_RPC_PASS || '';
+  const envUrl = host ? `http://${host}:${port}` : '';
+  const url = String(s.rpcUrl || envUrl).trim().replace(/\/+$/, '');
+  // Umbrel's credentials (APP_BITCOIN_* → BITCOIN_RPC_*) only ever go to the node from the environment
+  const envOk = !!envUrl && hostPort(url) === hostPort(envUrl);
+  const user = s.rpcUser || (envOk ? process.env.BITCOIN_RPC_USER : '') || '', pass = s.rpcPass || (envOk ? process.env.BITCOIN_RPC_PASS : '') || '';
   return /^https?:\/\//.test(url) && user && pass ? { url, user, pass, fromEnv: !s.rpcUrl && !!host } : null;
 }
 async function btcRpc(method, params = []) {
@@ -1804,6 +2442,21 @@ function maskSettings(s) {
 }
 function keepSecrets(next, prev) {
   for (const [a, b] of SECRET_PATHS) if (next && next[a] && next[a][b] === MASK) next[a][b] = prev && prev[a] ? prev[a][b] : '';
+  return next;
+}
+// a stored password/token belongs to its server: when the origin (scheme, host, port) changes and the same request does not
+// send a new secret (only the mask or nothing), the stored one is dropped instead of going to the new host. Another path
+// or ntfy topic on the same server keeps it.
+const SECRET_URLS = [['bitcoin', 'rpcUrl', 'rpcPass'], ['notify', 'ntfyUrl', 'ntfyToken'], ['ghostfolio', 'url', 'token']];
+const urlOrigin = u => { const t = String(u || '').trim(); try { const x = new URL(t); return `${x.protocol}//${x.host}`; } catch { return t.replace(/\/+$/, ''); } };
+function dropMovedSecrets(next, prev) {
+  if (!next || typeof next !== 'object') return next;
+  for (const [sec, uf, sf] of SECRET_URLS) {
+    const n = next[sec], p = prev && prev[sec];
+    if (!n || typeof n !== 'object' || !p || !p[sf]) continue;
+    const fresh = n[sf] != null && n[sf] !== '' && n[sf] !== MASK;
+    if (!fresh && urlOrigin(n[uf]) !== urlOrigin(p[uf])) n[sf] = '';
+  }
   return next;
 }
 
@@ -1950,7 +2603,7 @@ let lastClient = 0;
 const routes = {
   'GET /api/status': async () => ({
     ok: true, version: VERSION, uptime: Math.round((Date.now() - STARTED) / 1000), node: process.version,
-    memory: Math.round(process.memoryUsage().rss / 1048576), dataWritable, dataDir: DATA_DIR, cache: cache.size,
+    memory: Math.round(process.memoryUsage().rss / 1048576), dataWritable, dataDir: DATA_DIR, cache: cache.size, cachePfa: [...cache.keys()].filter(k => k.startsWith('pfa:')).length,
     sources: health, time: Date.now(), newsUpdated, archive: Object.keys(archive.events).length,
     mempool: mempoolBase(), mempoolLocal: !!mempoolLocal, btcNode: !!btcConf(), portfolioSource: ext.source, portfolioSynced: ext.syncedAt,
   }),
@@ -1962,13 +2615,19 @@ const routes = {
     return getChart(s, RANGES.has(q.get('range')) ? q.get('range') : '1mo', INTERVALS.has(q.get('interval')) ? q.get('interval') : '1d');
   },
   'GET /api/search': async q => { const t = String(q.get('q') || '').trim().slice(0, 40); return t.length < 1 ? [] : ySearch(t); },
+  'GET /api/resolve': async q => resolveQuery(q.get('q'), { light: q.get('light') === '1' }),
   'GET /api/perf': async q => getPerf(cleanSymbols(q.get('s'), 40)),
   'GET /api/portfolio/analysis': async q => {
     const base = ['CZK', 'USD', 'EUR', 'GBP', 'CHF'].includes(q.get('base')) ? q.get('base') : (state.settings && state.settings.baseCurrency) || 'CZK';
     const [bench] = cleanSymbols(q.get('bench') || '^GSPC', 1);
     return portfolioAnalysis(base, bench || '^GSPC');
   },
-  'GET /api/portfolio/source': async () => ({ source: ext.source, syncedAt: ext.syncedAt, url: ext.url || null, error: ext.error || null, activities: (ext.activities || []).length, accounts: ext.accounts || [], unknown: ext.unknown || [], baseCurrency: ext.baseCurrency || null, configured: !!(state.settings && state.settings.ghostfolio && state.settings.ghostfolio.token) }),
+  'GET /api/portfolio/source': async () => {
+    // a CoinGecko price that has arrived since the import or sync clears its note
+    const miss = (ext.unknown || []).map(u => String(u)).filter(u => u.endsWith(CG_MISS)).map(u => (/^COINGECKO:(.+)$/.exec(u.slice(0, -CG_MISS.length)) || [])[1]).filter(Boolean).map(s => s.toLowerCase());
+    if (miss.length) cgSettle(await timeoutP(cgSimple(miss).catch(() => null), 4000, null));
+    return { source: ext.source, syncedAt: ext.syncedAt, url: ext.url || null, error: ext.error || null, activities: (ext.activities || []).length, accounts: ext.accounts || [], unknown: ext.unknown || [], baseCurrency: ext.baseCurrency || null, configured: !!(state.settings && state.settings.ghostfolio && state.settings.ghostfolio.token) };
+  },
   'GET /api/portfolio/activities': async () => allActivities(),
   'POST /api/portfolio/import': async (q, req) => {
     const body = await readJSON(req);
@@ -1988,7 +2647,13 @@ const routes = {
   'GET /api/fundamentals': async q => {
     const [s] = cleanSymbols(q.get('s'), 1);
     if (!s) throw Object.assign(new Error('missing symbol'), { status: 400 });
-    return getFundamentals(s);
+    // without a Yahoo price there is nothing to analyse (BRK.B, CSPX, 2330 without an exchange suffix): 404, not an empty page
+    const noPrice = () => Object.assign(new Error(`Yahoo nemá pro ${s} cenu – zkuste symbol s příponou burzy`), { status: 404 });
+    const qs = await getQuotes([s]).catch(() => null);
+    if (qs && !qs[s] && badSym.has(s)) throw noPrice();
+    const d = await getFundamentals(s);
+    if (!d || !Number.isFinite(d.price) || !(d.price > 0)) throw noPrice();
+    return d;
   },
   'GET /api/corr': async q => getCorr(cleanSymbols(q.get('s'), 16), Math.max(20, Math.min(480, parseInt(q.get('days') || '90', 10) || 90))),
   'GET /api/fx': async () => cached('fx', 60e3, getFx),
@@ -2096,8 +2761,9 @@ async function handle(req, res) {
   lastClient = Date.now();
   try {
     if (PIN_GATED.test(p) && !pinIsOpen(pinToken(req))) return sendJSON(req, res, 423, { error: 'Portfolio je zamčené – zadejte PIN', locked: true });
-    // a cross-site form cannot send JSON without a preflight; no Origin check, app_proxy may rewrite Host
-    if (req.method === 'POST' && p.startsWith('/api/pin/') && !/^application\/json\b/i.test(req.headers['content-type'] || '')) return sendJSON(req, res, 415, { error: 'Content-Type musí být application/json' });
+    // a cross-site form cannot send JSON without a preflight: every state-changing request must be JSON
+    // (no Origin check, app_proxy may rewrite Host)
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method) && !/^application\/json\b/i.test(req.headers['content-type'] || '')) return sendJSON(req, res, 415, { error: 'Content-Type musí být application/json' });
     const stateKey = p.match(/^\/api\/state\/([a-z]+)$/);
     if (stateKey) {
       const key = stateKey[1];
@@ -2110,7 +2776,7 @@ async function handle(req, res) {
           const g = state.settings && state.settings.ghostfolio;
           if (g) body.ghostfolio = g; else delete body.ghostfolio;
         }
-        state[key] = key === 'settings' ? keepSecrets(body, state.settings) : body;
+        state[key] = key === 'settings' ? keepSecrets(dropMovedSecrets(body, state.settings), state.settings) : body;
         saveState();
         if (key === 'settings') cache.forEach((v, k) => { if (k === 'cryptoglobal' || k === 'btcnode' || k.startsWith('mempool:') || k.startsWith('pfa:')) cache.delete(k); });
         if (key === 'portfolio') cache.forEach((v, k) => { if (k.startsWith('pfa:')) cache.delete(k); });

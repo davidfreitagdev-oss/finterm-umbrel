@@ -2,7 +2,7 @@ manifestVersion: 1
 id: finterm-terminal
 category: finance
 name: FinTerm
-version: "1.4.0"
+version: "1.5.0"
 tagline: Bloomberg-style finanční terminál – trhy, kalendář, zprávy, krypto, portfolio
 icon: https://raw.githubusercontent.com/davidfreitagdev-oss/finterm-umbrel/main/finterm-terminal/app/public/icon.svg
 description: >-
@@ -28,15 +28,17 @@ description: >-
 
   Žádné API klíče nejsou potřeba. Data jsou uložena lokálně na vašem Umbrelu.
 releaseNotes: >-
-  Opravy čísel ve valuaci a portfoliu: akcie kotované v pencích a centech (Londýn, Johannesburg, Tel Aviv) se
-  oceňují v hlavní měně, férová cena už nevychází stokrát vyšší. Když Yahoo neuvádí investice (ČEZ), použije se
-  odhad volného CF z Yahoo, jinak se DCF nepočítá. Při výpadku kurzů se nic nepřepočítává 1 : 1 – použije se
-  poslední uložený kurz s datem, bez něj se pozice označí a nezapočtou. Srovnání s indexem používá historický kurz.
-  Bezriziková sazba i pro DKK, SEK, NOK, HUF, ZAR, ILS, INR, AUD, CAD, NZD, KRW, MXN a CLP, terminální růst nejvýš
-  do výše sazby, diskont nejméně o 4 p.b. nad sazbou. U bank a pojišťoven se nepočítá zadlužení, EV, FCF ani skóre
-  Zdraví. Dluh, hotovost a vlastní kapitál z jedné čtvrtletní rozvahy, výplatní poměr = dividenda / EPS. Konkurence
-  jen ze stejného sektoru a stejný verdikt na stránce Akcie i v portfoliu. Transakce před splitem se přepočítají.
-  Závazky (půjčky) jsou mimo výkonnost, nově čisté jmění.
+  Najdete libovolný instrument: stránka Akcie, příkazová řádka, alerty, transakce, watchlist i nástroje převedou
+  holý ticker (G1A, 7203, SAP), název firmy (Siemens, Toyota, Komerční) i symbol s burzou na správnou kotaci,
+  přednostně na domácí burze. U různých firem se stejným tickerem (ALV, MC) nabídnou výběr s burzou a měnou.
+  Alerty a transakce se uloží jen s nalezeným instrumentem a měnou z kotace; staré záznamy typu BTC nebo CEZ v USD
+  se označí a nabídnou opravu s potvrzením. Import z Ghostfolia rozpozná krypto, CoinGecko i ručně zadaná aktiva.
+  Opravené grafy TradingView (Korea, Tchaj-wan, severské burzy, indexy), index PX jako graf. Valuace akcií mimo
+  USA: volné cash flow po úrocích a leasingu, měna výkazů podle položek (Vale), kontrola EPS a dividend z Yahoo
+  proti výkazům a skutečným výplatám, odhad růstu jako medián odhadů zisku, tržeb a historie se zobrazením složek,
+  terminální růst podle inflačního cíle měny, Graham s místním výnosem (nejméně 4,4 %), konkurence bez jiných
+  kotací téže firmy. Bezpečnost: při změně serveru RPC, ntfy nebo Ghostfolia se uložené heslo zahodí, vlastní RSS
+  se načítají jen z ověřených veřejných adres, zápisy přijímají jen JSON.
 developer: FinTerm
 website: https://github.com/davidfreitagdev-oss/finterm-umbrel
 dependencies:
